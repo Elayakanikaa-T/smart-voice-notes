@@ -1,7 +1,13 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import type { ParamsDictionary, Query } from 'express-serve-static-core';
 import { verifyAccessToken, TokenPayload } from '../utils/crypto.js';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest<
+  P = ParamsDictionary,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = Query
+> extends Request<P, ResBody, ReqBody, ReqQuery> {
   user?: TokenPayload;
 }
 
