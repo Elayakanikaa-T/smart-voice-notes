@@ -31,7 +31,7 @@ export class QuizzesService {
       // Normalize key by title and topic_tag
       const normalizedTitle = (doc.title || '').replace(/—.*$/, '').trim().toLowerCase();
       const normalizedTopic = (doc.topic_tag || '').trim().toLowerCase();
-      const dedupKey = normalizedTopic || normalizedTitle || doc._id.toString();
+      const dedupKey = normalizedTopic || normalizedTitle || String(doc._id);
 
       if (seenTopics.has(dedupKey)) {
         duplicateIds.push(doc._id);

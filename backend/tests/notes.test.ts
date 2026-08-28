@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
+import { connectMongo, disconnectDatabases, cleanDatabase } from '../src/config/database.js';
 
 describe('Notes, Subjects & Offline Sync Endpoints', () => {
   const app = createApp();
@@ -9,6 +10,11 @@ describe('Notes, Subjects & Offline Sync Endpoints', () => {
   let noteId = '';
 
   beforeAll(async () => {
+    const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart_voice_notes';
+    const url = new URL(baseUri);
+    url.pathname = '/smart_voice_notes_test_notes';
+    await connectMongo(url.toString());
+
     const signupRes = await request(app)
       .post('/api/v1/auth/signup')
       .send({
@@ -17,6 +23,11 @@ describe('Notes, Subjects & Offline Sync Endpoints', () => {
         name: 'Alex Rivera',
       });
     accessToken = signupRes.body.data.tokens.accessToken;
+  });
+
+  afterAll(async () => {
+    await cleanDatabase();
+    await disconnectDatabases();
   });
 
   it('POST /api/v1/subjects - creates a subject', async () => {

@@ -105,7 +105,9 @@ export class WhisperSTTProvider implements ISTTProvider {
       response_format: 'verbose_json',
     });
 
-    const segments = response.segments?.map(s => ({
+    const raw = response as any;
+
+    const segments = raw.segments?.map((s: any) => ({
       start: s.start,
       end: s.end,
       text: s.text,
@@ -115,12 +117,12 @@ export class WhisperSTTProvider implements ISTTProvider {
 
     return {
       rawText: response.text,
-      language: response.language || options?.language || 'en',
+      language: raw.language || options?.language || 'en',
       confidence: 0.95,
-      durationSeconds: response.duration || 0,
+      durationSeconds: raw.duration || 0,
       segments: segments.length ? segments : [{
         start: 0,
-        end: response.duration || 0,
+        end: raw.duration || 0,
         text: response.text,
         confidence: 0.95,
       }],

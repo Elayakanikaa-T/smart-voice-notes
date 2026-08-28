@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
+import { connectMongo, disconnectDatabases, cleanDatabase } from '../src/config/database.js';
 
 describe('Quizzes & Learning Path Endpoints', () => {
   const app = createApp();
@@ -9,6 +10,11 @@ describe('Quizzes & Learning Path Endpoints', () => {
   let quizId = '';
 
   beforeAll(async () => {
+    const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart_voice_notes';
+    const url = new URL(baseUri);
+    url.pathname = '/smart_voice_notes_test_quizzes';
+    await connectMongo(url.toString());
+
     // Signup a test user
     const authRes = await request(app)
       .post('/api/v1/auth/signup')
@@ -63,7 +69,7 @@ describe('Quizzes & Learning Path Endpoints', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.recommended_courses).toBeDefined();
+    expect(res.body.data.recommendations).toBeDefined();
   });
 
   it('GET /api/v1/progress - returns readiness and progress analytics', async () => {
@@ -81,5 +87,10 @@ describe('Quizzes & Learning Path Endpoints', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.languages.length).toBeGreaterThan(5);
+  });
+
+  afterAll(async () => {
+    await cleanDatabase();
+    await disconnectDatabases();
   });
 });

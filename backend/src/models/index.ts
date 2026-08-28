@@ -22,8 +22,11 @@ export * from './share.model.js';
 
 // ── Employee Meeting Portal Models ───────────────────────────────────────────
 export * from './meeting.model.js';
-export * from './meetingTranscript.model.js';
+// Use named exports to avoid ambiguity with transcript.model (ITranscriptSegment)
+export { MeetingTranscriptModel } from './meetingTranscript.model.js';
 export * from './meetingSummary.model.js';
 export * from './decision.model.js';
-export * from './actionItem.model.js';
+// Use named exports to avoid ambiguity with summary.model (IActionItem)
+export { ActionItemModel } from './actionItem.model.js';
+export type { IActionItemOwner } from './actionItem.model.js';
 export * from './meetingNotification.model.js';

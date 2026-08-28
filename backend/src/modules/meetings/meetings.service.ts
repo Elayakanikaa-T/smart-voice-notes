@@ -142,8 +142,9 @@ export class MeetingsService {
 
     // Access check: admin can see all, others only if organizer or participant
     if (role !== 'admin') {
-      const isOrganizer = meeting.organizer === userId;
-      const isParticipant = meeting.participants?.some(
+      const m = meeting as any;
+      const isOrganizer = m.organizer === userId;
+      const isParticipant = m.participants?.some(
         (p: any) => p.userId === userId
       );
       if (!isOrganizer && !isParticipant && role !== 'employee') {

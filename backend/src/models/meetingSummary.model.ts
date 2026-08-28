@@ -8,7 +8,7 @@ export interface IMeetingSummary extends Document<string> {
   detailedNotes: string;
   keyPoints: string[];
   status: 'pending' | 'processing' | 'done' | 'failed';
-  model: string;
+  aiModel: string;
   errorMessage?: string;
   created_at: Date;
   updated_at: Date;
@@ -26,7 +26,7 @@ const MeetingSummarySchema = new Schema<IMeetingSummary>(
       enum: ['pending', 'processing', 'done', 'failed'],
       default: 'pending',
     },
-    model: { type: String, default: 'mock' },
+    aiModel: { type: String, default: 'mock' },
     errorMessage: { type: String },
   },
   {

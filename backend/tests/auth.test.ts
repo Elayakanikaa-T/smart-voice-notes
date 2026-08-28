@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { connectMongo, disconnectDatabases } from '../src/config/database.js';
+import { connectMongo, disconnectDatabases, cleanDatabase } from '../src/config/database.js';
 
 describe('Authentication & User Management Endpoints', () => {
   const app = createApp();
@@ -11,10 +11,14 @@ describe('Authentication & User Management Endpoints', () => {
   let refreshToken = '';
 
   beforeAll(async () => {
-    await connectMongo();
+    const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart_voice_notes';
+    const url = new URL(baseUri);
+    url.pathname = '/smart_voice_notes_test_auth';
+    await connectMongo(url.toString());
   });
 
   afterAll(async () => {
+    await cleanDatabase();
     await disconnectDatabases();
   });
 

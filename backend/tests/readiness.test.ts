@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
+import { connectMongo, disconnectDatabases, cleanDatabase } from '../src/config/database.js';
 
 describe('Quizzes, Mastery Engine & Readiness Scoring', () => {
   const app = createApp();
@@ -9,6 +10,11 @@ describe('Quizzes, Mastery Engine & Readiness Scoring', () => {
   let noteId = '';
 
   beforeAll(async () => {
+    const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart_voice_notes';
+    const url = new URL(baseUri);
+    url.pathname = '/smart_voice_notes_test_readiness';
+    await connectMongo(url.toString());
+
     const signupRes = await request(app)
       .post('/api/v1/auth/signup')
       .send({
@@ -57,16 +63,23 @@ describe('Quizzes, Mastery Engine & Readiness Scoring', () => {
     const quizList = quizzesRes.body.data;
     if (quizList.length > 0) {
       const quizId = quizList[0].id;
+      // Fetch quiz details to retrieve actual question IDs
+      const quizDetailRes = await request(app)
+        .get(`/api/v1/quizzes/${quizId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      const questions = quizDetailRes.body.data.questions || [];
+      const answers = questions.map((q: any) => ({
+        questionId: q.questionId || q.question_id || q.id || q._id,
+        selectedIndex: q.correctIndex !== undefined ? q.correctIndex : q.correct_index !== undefined ? q.correct_index : 0
+      }));
+
       const attemptRes = await request(app)
         .post(`/api/v1/quizzes/${quizId}/attempt`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({
           timeSpentSeconds: 95,
-          answers: [
-            { questionId: 'q-1', selectedIndex: 1 },
-            { questionId: 'q-2', selectedIndex: 0 },
-            { questionId: 'q-3', selectedIndex: 1 },
-          ],
+          answers: answers.slice(0, 3),
         });
 
       expect(attemptRes.status).toBe(200);
@@ -84,5 +97,10 @@ describe('Quizzes, Mastery Engine & Readiness Scoring', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.overallReadinessScore).toBeDefined();
     expect(res.body.data.totalSubjects).toBeGreaterThanOrEqual(1);
+  });
+
+  afterAll(async () => {
+    await cleanDatabase();
+    await disconnectDatabases();
   });
 });
