@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Briefcase, Plus, Search, Calendar, Clock, AlertCircle, 
-  CheckCircle2, Loader2, Sparkles, Filter, ChevronRight, Mic,
-  CheckSquare, Users, Trash2, Send, Copy, Link2, Share2, FileText
+  CheckCircle2, Loader2, Filter, ChevronRight, Mic,
+  Users, Trash2, Send, Copy, FileText
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -37,7 +37,6 @@ export default function Meetings() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [shareModalMeeting, setShareModalMeeting] = useState<MeetingItem | null>(null);
-  const [sendingLink, setSendingLink] = useState(false);
   const [sendSuccessMsg, setSendSuccessMsg] = useState('');
 
   const navigate = useNavigate();
@@ -107,7 +106,6 @@ export default function Meetings() {
   };
 
   const handleSendMeetingLink = async (meeting: MeetingItem) => {
-    setSendingLink(true);
     setSendSuccessMsg('');
     try {
       const res = await api.post(`/meetings/${meeting._id}/share`);
@@ -116,8 +114,6 @@ export default function Meetings() {
       setShareModalMeeting(meeting);
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to send meeting link.');
-    } finally {
-      setSendingLink(false);
     }
   };
 

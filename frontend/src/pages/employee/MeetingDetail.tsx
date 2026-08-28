@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Square, Upload, Loader2, CheckCircle2,
   FileText, Sparkles, CheckSquare, Plus, Trash2, Edit3, Save, X,
-  Calendar, ArrowLeft, RefreshCw, Volume2, Copy, Check, Mic, Users, Video, Link2,
-  Share2, Send, Camera, Languages, Play, Pause, FileVideo
+  Calendar, ArrowLeft, RefreshCw, Volume2, Copy, Check, Mic, Users, User, Video, Link2,
+  Send, Camera, Languages, FileVideo
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -34,20 +34,12 @@ interface TranscriptSegment {
   text: string;
 }
 
-interface MeetingSummary {
-  shortSummary: string;
-  detailedNotes: string;
-  keyPoints: string[];
-  status: string;
-}
-
 export default function MeetingDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [meeting, setMeeting] = useState<any>(null);
   const [transcript, setTranscript] = useState<any>(null);
-  const [summary, setSummary] = useState<MeetingSummary | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +99,6 @@ export default function MeetingDetail() {
       const data = res.data?.data;
       setMeeting(data.meeting);
       setTranscript(data.transcript);
-      setSummary(data.summary);
       setDecisions(data.decisions || []);
       setActionItems(data.actionItems || []);
     } catch (err: any) {
@@ -307,19 +298,6 @@ export default function MeetingDetail() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Regenerate Summary
-  const handleRegenerateSummary = async () => {
-    if (!id) return;
-    setRegenerating(true);
-    try {
-      await api.post(`/meetings/${id}/summary/regenerate`);
-      fetchMeetingData();
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to trigger summary regeneration.');
-    } finally {
-      setRegenerating(false);
-    }
-  };
 
   // Decision CRUD
   const handleAddDecision = async (e: React.FormEvent) => {

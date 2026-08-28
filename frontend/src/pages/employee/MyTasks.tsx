@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   CheckSquare, Filter, Calendar, AlertTriangle,
   Loader2, Bell, ExternalLink, Check, Sparkles,
-  Edit3, Trash2, Save, X, RefreshCw, User, Plus, Search
+  Edit3, Trash2, RefreshCw, User, Search
 } from 'lucide-react';
 import api from '../../lib/api';
 

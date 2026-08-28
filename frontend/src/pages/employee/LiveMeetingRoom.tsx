@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io, { Socket } from 'socket.io-client';
 import { 
-  Mic, MicOff, Video, VideoOff, PhoneOff, Settings, Users, MessageSquare, 
+  Mic, MicOff, Video, VideoOff, PhoneOff, Settings, MessageSquare, 
   Circle, Square, Play, Download, Save, X, Check, Loader2, FileVideo 
 } from 'lucide-react';
 import api from '../../lib/api';

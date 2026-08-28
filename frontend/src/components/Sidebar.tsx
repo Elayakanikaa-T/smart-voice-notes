@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, BookOpen, Mic, FileText, Brain, FlaskConical,
   BarChart2, Bell, Lightbulb, Map, Globe, User, LogOut, ShieldCheck, ChevronLeft, ChevronRight, Users,
-  Briefcase, CheckSquare, Search, PlusCircle
+  Briefcase, Search, PlusCircle
 } from 'lucide-react';
 import { useState } from 'react';
 
