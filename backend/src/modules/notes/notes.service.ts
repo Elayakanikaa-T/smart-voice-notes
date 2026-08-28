@@ -90,7 +90,7 @@ export class NotesService {
       })),
     });
 
-    const topicQuestions = [];
+    const topicQuestions: any[] = [];
     for (let lvl = 1; lvl <= 8; lvl++) {
       const diff = lvl <= 2 ? 'easy' : lvl <= 6 ? 'medium' : 'hard';
       topicQuestions.push(

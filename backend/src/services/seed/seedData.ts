@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import {
   SubjectModel,
   AudioNoteModel,
@@ -240,7 +240,7 @@ Always evaluate space-time complexity trade-offs, enforce invariants, and test e
     readiness_score: 88,
   }).catch(() => {});
 
-  const customQuestions = [];
+  const customQuestions: any[] = [];
   for (let lvl = 1; lvl <= 8; lvl++) {
     const diff = lvl <= 2 ? 'easy' : lvl <= 6 ? 'medium' : 'hard';
     customQuestions.push(
