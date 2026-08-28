@@ -1,0 +1,93 @@
+{
+  "name": "Smart Voice Note - Exam Reminder & Calendar Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "exam-reminder",
+        "options": {}
+      },
+      "name": "Webhook: Exam Reminder Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Calculate countdown & reminder message\nconst item = items[0].json;\nconst examDate = new Date(item.examDate || item.exam_date);\nconst now = new Date();\nconst daysRemaining = Math.ceil((examDate - now) / (1000 * 60 * 60 * 24));\n\nreturn [{\n  json: {\n    ...item,\n    daysRemaining,\n    alertTitle: `📚 Exam Alert: ${item.title}`,\n    alertMessage: `Your exam for ${item.subject_name || 'Subject'} is in ${daysRemaining} day(s) on ${examDate.toLocaleDateString()}`,\n    calendarSummary: `[Exam] ${item.title}`,\n    calendarStart: examDate.toISOString(),\n    calendarEnd: new Date(examDate.getTime() + 2 * 60 * 60 * 1000).toISOString()\n  }\n}];"
+      },
+      "name": "Format Reminder Notification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "primary",
+        "start": "={{$json[\"calendarStart\"]}}",
+        "end": "={{$json[\"calendarEnd\"]}}",
+        "summary": "={{$json[\"calendarSummary\"]}}",
+        "description": "Auto-scheduled study reminder from Smart Voice Note App.",
+        "additionalFields": {
+          "reminders": {
+            "overrides": [
+              { "method": "popup", "minutes": 1440 },
+              { "method": "popup", "minutes": 120 }
+            ]
+          }
+        }
+      },
+      "name": "Google / Outlook Calendar Sync",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:5000/api/v1/webhooks/calendar-event-created",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"reminderId\": \"{{$json[\"id\"]}}\",\n  \"calendarEventId\": \"{{$node[\"Google / Outlook Calendar Sync\"].json[\"id\"] || 'synced-evt-123'}}\"\n}"
+      },
+      "name": "Callback Backend Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [950, 200]
+    }
+  ],
+  "connections": {
+    "Webhook: Exam Reminder Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Reminder Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reminder Notification": {
+      "main": [
+        [
+          {
+            "node": "Google / Outlook Calendar Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google / Outlook Calendar Sync": {
+      "main": [
+        [
+          {
+            "node": "Callback Backend Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

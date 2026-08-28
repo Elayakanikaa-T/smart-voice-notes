@@ -1,0 +1,48 @@
+{
+  "name": "Smart Voice Note - Auto Share Note Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-share",
+        "options": {}
+      },
+      "name": "Webhook: Note Ready For Sharing",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=http://localhost:5000/api/v1/shares/notes/{{$json[\"noteId\"]}}/share",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"sharedWithEmail\": \"{{$json[\"targetEmail\"] || 'studygroup@university.edu'}}\",\n  \"permission\": \"view\"\n}"
+      },
+      "name": "Generate Share Link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "notifications@smartnotes.ai",
+        "toEmail": "={{$node[\"Webhook: Note Ready For Sharing\"].json[\"targetEmail\"] || 'studygroup@university.edu'}}",
+        "subject": "=📚 New Study Note Shared: {{$node[\"Webhook: Note Ready For Sharing\"].json[\"title\"]}}",
+        "text": "=Hello,\n\nA new AI-generated study note and summary has been shared with you:\n\n{{$json[\"data\"][\"shareUrl\"]}}\n\nHappy studying!\nSmart Voice Note App"
+      },
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Note Ready For Sharing": {
+      "main": [[{ "node": "Generate Share Link", "type": "main", "index": 0 }]]
+    },
+    "Generate Share Link": {
+      "main": [[{ "node": "Send Email Notification", "type": "main", "index": 0 }]]
+    }
+  }
+}

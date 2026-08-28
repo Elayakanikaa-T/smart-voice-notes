@@ -1,0 +1,65 @@
+{
+  "name": "Smart Voice Note - Note Pipeline & Planner Chaining",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "note-pipeline",
+        "options": {}
+      },
+      "name": "Webhook: Note Audio Uploaded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=http://localhost:5000/api/v1/ai/{{$json[\"noteId\"]}}/generate-flashcards",
+        "jsonParameters": true,
+        "bodyParametersJson": "{\"count\": 5}"
+      },
+      "name": "Trigger Flashcard Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [480, 200]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=http://localhost:5000/api/v1/ai/{{$json[\"noteId\"]}}/generate-quiz",
+        "jsonParameters": true,
+        "bodyParametersJson": "{\"difficulty\": \"medium\"}"
+      },
+      "name": "Trigger Quiz Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [480, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    status: 'completed',\n    pipeline: 'note-to-knowledge',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Consolidate & Notify",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Note Audio Uploaded": {
+      "main": [
+        [
+          { "node": "Trigger Flashcard Generation", "type": "main", "index": 0 },
+          { "node": "Trigger Quiz Generation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Trigger Flashcard Generation": {
+      "main": [[{ "node": "Consolidate & Notify", "type": "main", "index": 0 }]]
+    },
+    "Trigger Quiz Generation": {
+      "main": [[{ "node": "Consolidate & Notify", "type": "main", "index": 0 }]]
+    }
+  }
+}

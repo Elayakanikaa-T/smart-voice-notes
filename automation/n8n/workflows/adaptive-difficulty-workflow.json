@@ -1,0 +1,45 @@
+{
+  "name": "Smart Voice Note - Adaptive Difficulty Adjustment Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "adaptive-loop",
+        "options": {}
+      },
+      "name": "Webhook: Quiz Attempt Logged",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = items[0].json;\nconst score = item.score || 0;\nlet nextDifficulty = 'medium';\n\nif (score >= 85) {\n  nextDifficulty = 'hard';\n} else if (score < 60) {\n  nextDifficulty = 'easy';\n}\n\nreturn [{\n  json: {\n    ...item,\n    nextDifficulty,\n    requiresReview: score < 60,\n    recommendedFocus: item.weakAreas || ['Core Concepts']\n  }\n}];"
+      },
+      "name": "Compute Next Difficulty Level",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:5000/api/v1/webhooks/ai-job-complete",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"userId\": \"{{$json[\"userId\"]}}\",\n  \"subjectId\": \"{{$json[\"subjectId\"]}}\",\n  \"noteId\": \"{{$json[\"noteId\"]}}\"\n}"
+      },
+      "name": "Update Student Readiness Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Quiz Attempt Logged": {
+      "main": [[{ "node": "Compute Next Difficulty Level", "type": "main", "index": 0 }]]
+    },
+    "Compute Next Difficulty Level": {
+      "main": [[{ "node": "Update Student Readiness Engine", "type": "main", "index": 0 }]]
+    }
+  }
+}
