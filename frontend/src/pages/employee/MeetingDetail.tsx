@@ -84,11 +84,17 @@ export default function MeetingDetail() {
   const [recordingLanguage, setRecordingLanguage] = useState('en-US');
   const [isEditingTranscript, setIsEditingTranscript] = useState(false);
 
+  // Full Transcript Edit State
+  const [isEditingFullTranscript, setIsEditingFullTranscript] = useState(false);
+  const [fullTranscriptDraft, setFullTranscriptDraft] = useState('');
+  const [savingTranscript, setSavingTranscript] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef<string>('');
+  const accumulatedTranscriptRef = useRef<string>('');
+  const sessionFinalTranscriptRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const liveVideoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
@@ -101,6 +107,9 @@ export default function MeetingDetail() {
       setTranscript(data.transcript);
       setDecisions(data.decisions || []);
       setActionItems(data.actionItems || []);
+      if (data.transcript?.fullText) {
+        setFullTranscriptDraft(data.transcript.fullText);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load meeting details.');
     } finally {
@@ -140,7 +149,7 @@ export default function MeetingDetail() {
   }, [id, meeting?.status]);
 
   // Speech Recognition setup for exact speech matching
-  const initLiveRecognition = (lang = 'en-US') => {
+  const initLiveRecognition = (lang = recordingLanguage) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -155,15 +164,18 @@ export default function MeetingDetail() {
 
       rec.onresult = (event: any) => {
         let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        let currentFinal = '';
+        for (let i = event.results.length - 1; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + piece.trim();
+            currentFinal += (currentFinal ? ' ' : '') + piece.trim();
           } else {
-            interim += ' ' + piece.trim();
+            interim += (interim ? ' ' : '') + piece.trim();
           }
         }
-        const combined = (finalTranscriptRef.current + (interim ? ' ' + interim : '')).trim();
+        sessionFinalTranscriptRef.current = currentFinal;
+        const prefix = accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '';
+        const combined = (prefix + (currentFinal ? currentFinal + ' ' : '') + interim).trim();
         if (combined) {
           setLiveTranscript(combined);
         }
@@ -174,10 +186,17 @@ export default function MeetingDetail() {
       };
 
       rec.onend = () => {
+        if (sessionFinalTranscriptRef.current) {
+          accumulatedTranscriptRef.current = (
+            (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
+            sessionFinalTranscriptRef.current
+          ).trim();
+          sessionFinalTranscriptRef.current = '';
+        }
         if (isRecordingRef.current) {
           setTimeout(() => {
             if (isRecordingRef.current) initLiveRecognition(lang);
-          }, 150);
+          }, 100);
         }
       };
 
@@ -188,13 +207,31 @@ export default function MeetingDetail() {
     }
   };
 
+  const handleSaveFullTranscript = async () => {
+    if (!id || !fullTranscriptDraft.trim()) return;
+    setSavingTranscript(true);
+    try {
+      const res = await api.patch(`/meetings/${id}/transcript`, {
+        fullText: fullTranscriptDraft.trim(),
+        segments: [{ speaker: 'Speaker', start: 0, end: 0, text: fullTranscriptDraft.trim() }],
+      });
+      setTranscript(res.data?.data || { ...transcript, fullText: fullTranscriptDraft.trim() });
+      setIsEditingFullTranscript(false);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to update transcript.');
+    } finally {
+      setSavingTranscript(false);
+    }
+  };
+
   // Handle in-page recording with playback option
   const startRecording = async (type: 'audio' | 'video' = recordMediaType) => {
     try {
       setRecordedBlob(null);
       setRecordedAudioUrl(null);
       setLiveTranscript('');
-      finalTranscriptRef.current = '';
+      accumulatedTranscriptRef.current = '';
+      sessionFinalTranscriptRef.current = '';
       isRecordingRef.current = true;
 
       const constraints: MediaStreamConstraints = type === 'video'
@@ -642,7 +679,8 @@ export default function MeetingDetail() {
                     setRecordedBlob(null);
                     setRecordedAudioUrl(null);
                     setLiveTranscript('');
-                    finalTranscriptRef.current = '';
+                    accumulatedTranscriptRef.current = '';
+                    sessionFinalTranscriptRef.current = '';
                   }}
                   disabled={audioUploading}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"
@@ -850,23 +888,77 @@ export default function MeetingDetail() {
       {/* ===================================================================== */}
       {activeTab === 'transcript' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-400" /> Speech-to-Text Transcript
             </h2>
 
-            {transcript?.fullText && (
-              <button
-                onClick={handleCopyTranscript}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition-all"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy Text'}</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {transcript?.fullText && !isEditingFullTranscript && (
+                <>
+                  <button
+                    onClick={() => {
+                      setFullTranscriptDraft(transcript.fullText);
+                      setIsEditingFullTranscript(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold transition-all"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Transcript</span>
+                  </button>
+
+                  <button
+                    onClick={handleCopyTranscript}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition-all"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy Text'}</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          {transcript?.fullText ? (
+          {isEditingFullTranscript ? (
+            <div className="p-6 rounded-3xl bg-slate-900 border border-blue-500/40 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                  <Edit3 className="w-4 h-4" /> Edit Speech-to-Text Transcript:
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Refine any misrecognized words or add annotations
+                </span>
+              </div>
+
+              <textarea
+                value={fullTranscriptDraft}
+                onChange={(e) => setFullTranscriptDraft(e.target.value)}
+                rows={8}
+                className="w-full p-4 bg-slate-950 border border-slate-700 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
+                placeholder="Type or edit transcript text here..."
+              />
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingFullTranscript(false)}
+                  disabled={savingTranscript}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveFullTranscript}
+                  disabled={savingTranscript || !fullTranscriptDraft.trim()}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                >
+                  {savingTranscript ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{savingTranscript ? 'Saving...' : 'Save Transcript'}</span>
+                </button>
+              </div>
+            </div>
+          ) : transcript?.fullText ? (
             <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl">
               {/* Segments breakdown */}
               {transcript.segments && transcript.segments.length > 0 ? (

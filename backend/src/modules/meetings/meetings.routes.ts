@@ -42,6 +42,9 @@ router.post(
   (req, res, next) => meetingsController.uploadAudio(req as any, res, next)
 );
 
+// Update transcript directly
+router.patch('/:id/transcript', (req, res, next) => meetingsController.updateTranscript(req as any, res, next));
+
 // Poll processing status
 router.get('/:id/status', (req, res, next) => meetingsController.getStatus(req as any, res, next));
 

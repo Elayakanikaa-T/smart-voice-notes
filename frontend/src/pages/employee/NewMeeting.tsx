@@ -30,7 +30,8 @@ export default function NewMeeting() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef<string>('');
+  const accumulatedTranscriptRef = useRef<string>('');
+  const sessionFinalTranscriptRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const navigate = useNavigate();
 
@@ -45,7 +46,7 @@ export default function NewMeeting() {
     };
   }, []);
 
-  const initLiveRecognition = (lang = 'en-US') => {
+  const initLiveRecognition = (lang = language) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -60,25 +61,39 @@ export default function NewMeeting() {
 
       rec.onresult = (event: any) => {
         let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        let currentFinal = '';
+        for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + piece.trim();
+            currentFinal += (currentFinal ? ' ' : '') + piece.trim();
           } else {
-            interim += ' ' + piece.trim();
+            interim += (interim ? ' ' : '') + piece.trim();
           }
         }
-        const combined = (finalTranscriptRef.current + (interim ? ' ' + interim : '')).trim();
+        sessionFinalTranscriptRef.current = currentFinal;
+        const prefix = accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '';
+        const combined = (prefix + (currentFinal ? currentFinal + ' ' : '') + interim).trim();
         if (combined) {
           setLiveTranscript(combined);
         }
       };
 
+      rec.onerror = (e: any) => {
+        console.warn('[NewMeeting STT] status:', e.error);
+      };
+
       rec.onend = () => {
+        if (sessionFinalTranscriptRef.current) {
+          accumulatedTranscriptRef.current = (
+            (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
+            sessionFinalTranscriptRef.current
+          ).trim();
+          sessionFinalTranscriptRef.current = '';
+        }
         if (isRecordingRef.current) {
           setTimeout(() => {
             if (isRecordingRef.current) initLiveRecognition(lang);
-          }, 150);
+          }, 100);
         }
       };
 
@@ -95,7 +110,8 @@ export default function NewMeeting() {
       setAudioBlob(null);
       setAudioUrl(null);
       setLiveTranscript('');
-      finalTranscriptRef.current = '';
+      accumulatedTranscriptRef.current = '';
+      sessionFinalTranscriptRef.current = '';
       isRecordingRef.current = true;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -146,6 +162,16 @@ export default function NewMeeting() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
+      }
+      if (sessionFinalTranscriptRef.current) {
+        accumulatedTranscriptRef.current = (
+          (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
+          sessionFinalTranscriptRef.current
+        ).trim();
+        sessionFinalTranscriptRef.current = '';
+        if (accumulatedTranscriptRef.current) {
+          setLiveTranscript(accumulatedTranscriptRef.current);
+        }
       }
     }
   };
@@ -446,24 +472,38 @@ export default function NewMeeting() {
             </div>
           )}
 
-          {/* Audio Preview Player & Captured Transcript Review */}
-          {audioUrl && (
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <span className="text-xs text-slate-300 font-semibold flex items-center gap-2">
-                  <Volume2 className="w-4 h-4 text-emerald-400" /> Audio Playback Review ({formatDuration(savedDuration)})
-                </span>
-                <audio controls src={audioUrl} className="w-full sm:w-80 h-9" />
-              </div>
-
-              {liveTranscript && (
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200">
-                  <span className="text-[11px] font-bold text-cyan-400 block mb-1">Exact Transcribed Speech:</span>
-                  <p>{liveTranscript}</p>
-                </div>
-              )}
+          {/* Live Speech Recognition & Captured Transcript Review */}
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs text-emerald-400 font-bold flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" /> Exact Speech-to-Text Transcript (Editable)
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {isRecording ? '🔴 Listening in real time...' : 'You can review or manually edit this transcript before saving'}
+              </span>
             </div>
-          )}
+
+            <textarea
+              value={liveTranscript}
+              onChange={(e) => setLiveTranscript(e.target.value)}
+              placeholder={
+                isRecording
+                  ? 'Listening to microphone... Words will appear here in real time.'
+                  : 'Spoken words from recording will appear here. You can also type or refine the transcript text directly.'
+              }
+              rows={4}
+              className="w-full p-3.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed font-sans"
+            />
+
+            {audioUrl && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+                <span className="text-xs text-slate-300 font-semibold flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-emerald-400" /> Audio Playback ({formatDuration(savedDuration)})
+                </span>
+                <audio controls src={audioUrl} className="w-full sm:w-80 h-8" />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Action Button */}

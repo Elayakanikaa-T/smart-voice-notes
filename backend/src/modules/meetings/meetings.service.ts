@@ -297,8 +297,6 @@ export class MeetingsService {
       await NotificationModel.insertMany(notifs);
     }
 
-    logger.info(`[MeetingsService] Shared meeting ${meetingId} with ${notifs.length} user(s).`);
-
     return {
       success: true,
       meetingId,
@@ -307,6 +305,36 @@ export class MeetingsService {
       notifiedCount: notifs.length,
       message: `Meeting link sent to ${notifs.length} user(s) and participants successfully!`,
     };
+  }
+
+  async updateTranscript(
+    meetingId: string,
+    fullText: string,
+    segments?: any[],
+    userId?: string,
+    role?: string
+  ) {
+    const meeting = await MeetingModel.findById(meetingId);
+    if (!meeting) throw new Error('Meeting not found.');
+
+    const segs = segments && segments.length > 0 
+      ? segments 
+      : [{ speaker: 'Speaker', start: 0, end: 0, text: fullText }];
+
+    const updated = await MeetingTranscriptModel.findOneAndUpdate(
+      { meetingId },
+      {
+        $set: {
+          meetingId,
+          status: 'done',
+          fullText,
+          segments: segs,
+        },
+      },
+      { upsert: true, new: true }
+    ).lean();
+
+    return updated;
   }
 }
 

@@ -124,6 +124,21 @@ export class MeetingsController {
       res.status(400).json({ success: false, error: err.message });
     }
   }
+
+  async updateTranscript(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await meetingsService.updateTranscript(
+        req.params.id,
+        req.body?.fullText,
+        req.body?.segments,
+        req.user?.userId,
+        req.user?.role || 'employee'
+      );
+      res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
 }
 
 export const meetingsController = new MeetingsController();
