@@ -62,6 +62,9 @@ export function createApp(): express.Application {
     console.warn('[App] Warning creating upload directories:', err.message);
   }
 
+  // Trust proxy for reverse proxies like Render / Heroku / Cloudflare
+  app.set('trust proxy', 1);
+
   // Security & standard middlewares
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: config.corsOrigin, credentials: true }));
@@ -69,16 +72,22 @@ export function createApp(): express.Application {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+  // Favicon handler
+  app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
   // Static files for local uploads and web preview
   app.use('/uploads', express.static(config.storage.localUploadDir));
   const frontendPath = path.resolve(process.cwd(), '../frontend/dist');
-  app.use(express.static(frontendPath));
+  if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+  }
 
   // Global rate limiter (generous limit for local dev & testing)
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10000,
     message: { success: false, error: 'Too many requests, please try again later.' },
+    validate: { xForwardedForHeader: false },
   });
   app.use(limiter);
 
@@ -141,7 +150,7 @@ export function createApp(): express.Application {
   }
 
   // Root & Fallback handlers (serves frontend if built locally, or returns API status on standalone cloud servers like Render)
-  app.get('/', (_req, res) => {
+  app.all('/', (_req, res) => {
     const indexPath = path.join(frontendPath, 'index.html');
     if (fs.existsSync(indexPath)) {
       return res.sendFile(indexPath);
@@ -158,11 +167,22 @@ export function createApp(): express.Application {
   });
 
   app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
     const indexPath = path.join(frontendPath, 'index.html');
     if (fs.existsSync(indexPath)) {
       return res.sendFile(indexPath);
     }
-    return next();
+    return res.status(200).json({
+      success: true,
+      service: 'Smart Voice Note Application API',
+      status: 'online',
+      version: '1.0.0',
+      apiPrefix: config.apiPrefix,
+      documentation: '/api-docs',
+      health: '/health',
+    });
   });
 
   // Error handling for unmatched API routes

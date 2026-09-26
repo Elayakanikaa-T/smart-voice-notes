@@ -19,28 +19,48 @@ export class GeminiLLMProvider implements ILLMProvider {
   }
 
   private async callGemini(prompt: string, expectJson = true): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
-    const body: any = {
-      contents: [{ parts: [{ text: prompt }] }],
-    };
+    const candidateModels = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+    let lastError: Error | null = null;
 
-    if (expectJson) {
-      body.generationConfig = { responseMimeType: 'application/json' };
+    for (const model of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+        const body: any = {
+          contents: [{ parts: [{ text: prompt }] }],
+        };
+
+        if (expectJson) {
+          body.generationConfig = { responseMimeType: 'application/json' };
+        }
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (res.status === 404) {
+          logger.warn(`[LLM:Gemini] Model ${model} returned 404. Falling back to next candidate model...`);
+          continue;
+        }
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Gemini API error (${res.status}): ${errText}`);
+        }
+
+        const data: any = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } catch (err: any) {
+        lastError = err;
+        if (err.message && err.message.includes('404')) {
+          continue;
+        }
+        throw err;
+      }
     }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Gemini API error (${res.status}): ${errText}`);
-    }
-
-    const data: any = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    throw lastError || new Error('All Gemini model endpoints failed.');
   }
 
   async generateSummary(transcript: string, title?: string): Promise<AISummaryResult> {

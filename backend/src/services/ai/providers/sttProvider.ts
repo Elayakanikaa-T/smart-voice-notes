@@ -129,108 +129,123 @@ Output JSON strictly conforming to this schema:
   ]
 }`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
-    const body = {
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Audio,
-              },
-            },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-      },
-    };
-
-    // Retry with exponential backoff for transient errors (503 overload, 429 rate limit)
+    const candidateModels = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
     let lastError: Error | null = null;
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
 
-        if (res.status === 503 || res.status === 429) {
-          const errText = await res.text();
-          lastError = new Error(`Gemini API overloaded (${res.status}): ${errText}`);
-          logger.warn(`[STT:Gemini] Attempt ${attempt}/${this.maxRetries} failed with ${res.status}. Retrying...`);
-          await sleep(Math.pow(2, attempt) * 1000); // 2s, 4s, 8s
-          continue;
-        }
+    for (const model of candidateModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+      const body = {
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Audio,
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      };
 
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Gemini STT API error (${res.status}): ${errText}`);
-        }
+      let modelNotFoundError = false;
 
-        const data: any = await res.json();
-        const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        let rawText = '';
-        let segments: TranscriptSegmentDTO[] = [];
-        let parsedLanguage = options?.language || 'en';
-        let parsedDuration = 30;
-
+      for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         try {
-          const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-          const parsed = JSON.parse(cleaned);
-          rawText = parsed.rawText || parsed.transcript || parsed.text || '';
-          parsedLanguage = parsed.language || options?.language || 'en';
-          parsedDuration = Number(parsed.durationSeconds) || 30;
-          if (Array.isArray(parsed.segments)) {
-            segments = parsed.segments.map((s: any) => ({
-              start: Number(s.start) || 0,
-              end: Number(s.end) || 0,
-              text: s.text || '',
-              speaker: s.speaker || 'Speaker 1',
-              confidence: Number(s.confidence) || 0.98,
-            }));
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          if (res.status === 404) {
+            logger.warn(`[STT:Gemini] Model ${model} returned 404 (Not Found). Trying next model...`);
+            modelNotFoundError = true;
+            break; // Break retry loop to try next model in candidateModels
           }
-        } catch {
-          rawText = content.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
-        }
 
-        if (!rawText.trim()) {
-          rawText = content.trim() || '';
-        }
+          if (res.status === 503 || res.status === 429) {
+            const errText = await res.text();
+            lastError = new Error(`Gemini API overloaded (${res.status}): ${errText}`);
+            logger.warn(`[STT:Gemini] Attempt ${attempt}/${this.maxRetries} failed with ${res.status}. Retrying...`);
+            await sleep(Math.pow(2, attempt) * 1000); // 2s, 4s, 8s
+            continue;
+          }
 
-        return {
-          rawText: rawText.trim(),
-          language: parsedLanguage,
-          confidence: 0.98,
-          durationSeconds: parsedDuration,
-          segments: segments.length > 0 ? segments : rawText.trim() ? [{
-            start: 0,
-            end: parsedDuration,
-            text: rawText.trim(),
-            speaker: 'Speaker 1',
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Gemini STT API error (${res.status}): ${errText}`);
+          }
+
+          const data: any = await res.json();
+          const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+          let rawText = '';
+          let segments: TranscriptSegmentDTO[] = [];
+          let parsedLanguage = options?.language || 'en';
+          let parsedDuration = 30;
+
+          try {
+            const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+            rawText = parsed.rawText || parsed.transcript || parsed.text || '';
+            parsedLanguage = parsed.language || options?.language || 'en';
+            parsedDuration = Number(parsed.durationSeconds) || 30;
+            if (Array.isArray(parsed.segments)) {
+              segments = parsed.segments.map((s: any) => ({
+                start: Number(s.start) || 0,
+                end: Number(s.end) || 0,
+                text: s.text || '',
+                speaker: s.speaker || 'Speaker 1',
+                confidence: Number(s.confidence) || 0.98,
+              }));
+            }
+          } catch {
+            rawText = content.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
+          }
+
+          if (!rawText.trim()) {
+            rawText = content.trim() || '';
+          }
+
+          return {
+            rawText: rawText.trim(),
+            language: parsedLanguage,
             confidence: 0.98,
-          }] : [],
-        };
-      } catch (err: any) {
-        lastError = err;
-        if (attempt < this.maxRetries) {
-          logger.warn(`[STT:Gemini] Attempt ${attempt}/${this.maxRetries} failed: ${err.message}. Retrying...`);
-          await sleep(Math.pow(2, attempt) * 1000);
+            durationSeconds: parsedDuration,
+            segments: segments.length > 0 ? segments : rawText.trim() ? [{
+              start: 0,
+              end: parsedDuration,
+              text: rawText.trim(),
+              speaker: 'Speaker 1',
+              confidence: 0.98,
+            }] : [],
+          };
+        } catch (err: any) {
+          lastError = err;
+          if (attempt < this.maxRetries) {
+            logger.warn(`[STT:Gemini] Model ${model} attempt ${attempt}/${this.maxRetries} failed: ${err.message}. Retrying...`);
+            await sleep(Math.pow(2, attempt) * 1000);
+          }
         }
+      }
+
+      if (!modelNotFoundError && lastError) {
+        // If it was another error (e.g. invalid audio format or auth error), continue or keep trying
       }
     }
 
-    // All retries exhausted — throw error, do NOT fall back to mock/fake text
-    logger.error(`[STT:Gemini] All ${this.maxRetries} attempts failed: ${lastError?.message}`);
-    throw lastError || new Error('Gemini STT transcription failed after all retries.');
+    // All models and retries exhausted
+    logger.error(`[STT:Gemini] All candidate models failed: ${lastError?.message}`);
+    throw lastError || new Error('Gemini STT transcription failed across all candidate models.');
   }
 }
 
