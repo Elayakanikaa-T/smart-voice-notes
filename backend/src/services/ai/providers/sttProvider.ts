@@ -107,7 +107,7 @@ export class GeminiSTTProvider implements ISTTProvider {
       throw new Error(`Audio file not found: ${audioPathOrUrl}`);
     }
 
-    logger.info(`[STT:Gemini] Transcribing audio with Gemini 1.5 Flash: ${resolved}`);
+    logger.info(`[STT:Gemini] Transcribing audio with Gemini 2.0 Flash: ${resolved}`);
     const audioBuffer = fs.readFileSync(resolved);
     const base64Audio = audioBuffer.toString('base64');
     const mimeType = getMimeTypeFromExt(resolved);
@@ -129,7 +129,7 @@ Output JSON strictly conforming to this schema:
   ]
 }`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
     const body = {
       contents: [
         {

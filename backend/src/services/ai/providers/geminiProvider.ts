@@ -19,7 +19,7 @@ export class GeminiLLMProvider implements ILLMProvider {
   }
 
   private async callGemini(prompt: string, expectJson = true): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
     const body: any = {
       contents: [{ parts: [{ text: prompt }] }],
     };
