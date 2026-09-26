@@ -46,7 +46,7 @@ export const config = {
   },
 
   ai: {
-    sttProvider: (process.env.STT_PROVIDER || 'mock') as 'whisper' | 'assemblyai' | 'google' | 'mock',
+    sttProvider: (process.env.STT_PROVIDER || 'hybrid') as 'whisper' | 'assemblyai' | 'google' | 'mock' | 'hybrid' | 'gemini',
     llmProvider: (process.env.LLM_PROVIDER || 'hybrid') as 'openai' | 'gemini' | 'hybrid' | 'mock' | 'anthropic',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     geminiApiKey: process.env.GEMINI_API_KEY || '',

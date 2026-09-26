@@ -190,26 +190,44 @@ Output JSON strictly conforming to this schema:
 
       const data: any = await res.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const parsed = JSON.parse(content);
+      
+      let rawText = '';
+      let segments: TranscriptSegmentDTO[] = [];
+      let parsedLanguage = options?.language || 'en';
+      let parsedDuration = 30;
 
-      const rawText = parsed.rawText || '';
-      const segments: TranscriptSegmentDTO[] = (parsed.segments || []).map((s: any) => ({
-        start: Number(s.start) || 0,
-        end: Number(s.end) || 0,
-        text: s.text || '',
-        speaker: s.speaker || 'Speaker 1',
-        confidence: Number(s.confidence) || 0.98,
-      }));
+      try {
+        const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+        const parsed = JSON.parse(cleaned);
+        rawText = parsed.rawText || parsed.transcript || parsed.text || '';
+        parsedLanguage = parsed.language || options?.language || 'en';
+        parsedDuration = Number(parsed.durationSeconds) || 30;
+        if (Array.isArray(parsed.segments)) {
+          segments = parsed.segments.map((s: any) => ({
+            start: Number(s.start) || 0,
+            end: Number(s.end) || 0,
+            text: s.text || '',
+            speaker: s.speaker || 'Speaker 1',
+            confidence: Number(s.confidence) || 0.98,
+          }));
+        }
+      } catch {
+        rawText = content.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
+      }
+
+      if (!rawText.trim()) {
+        rawText = content.trim() || 'Audio transcribed successfully.';
+      }
 
       return {
-        rawText: rawText.trim() || 'Audio transcribed successfully.',
-        language: parsed.language || options?.language || 'en',
-        confidence: Number(parsed.confidence) || 0.98,
-        durationSeconds: Number(parsed.durationSeconds) || 30,
+        rawText: rawText.trim(),
+        language: parsedLanguage,
+        confidence: 0.98,
+        durationSeconds: parsedDuration,
         segments: segments.length > 0 ? segments : [{
           start: 0,
-          end: Number(parsed.durationSeconds) || 30,
-          text: rawText.trim() || 'Audio transcribed successfully.',
+          end: parsedDuration,
+          text: rawText.trim(),
           speaker: 'Speaker 1',
           confidence: 0.98,
         }],

@@ -62,19 +62,16 @@ export default function RecordAudio() {
       recognition.lang = lang;
 
       recognition.onresult = (event: any) => {
-        let sessionFinal = '';
-        let interim = '';
+        let fullSessionText = '';
         for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            sessionFinal += (sessionFinal ? ' ' : '') + piece.trim();
-          } else {
-            interim += (interim ? ' ' : '') + piece.trim();
+          if (piece) {
+            fullSessionText += (fullSessionText ? ' ' : '') + piece.trim();
           }
         }
-        currentSessionTranscriptRef.current = sessionFinal;
+        currentSessionTranscriptRef.current = fullSessionText;
         const prefix = baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '';
-        const combined = (prefix + (sessionFinal ? sessionFinal + ' ' : '') + interim).trim();
+        const combined = (prefix + fullSessionText).trim();
         if (combined) {
           setLiveTranscript(combined);
         }
