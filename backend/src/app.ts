@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 
 import { config } from './config/env.js';
 import { isMongoConnected } from './config/database.js';
@@ -39,6 +40,27 @@ import { startTaskReminderCron } from './services/taskReminderCron.js';
 
 export function createApp(): express.Application {
   const app = express();
+
+  // Ensure all upload directories exist recursively on startup
+  try {
+    const requiredDirs = [
+      config.storage.localUploadDir,
+      path.resolve(process.cwd(), 'uploads'),
+      path.resolve(process.cwd(), 'uploads/meetings'),
+      path.resolve(process.cwd(), 'uploads/notes'),
+      path.resolve(process.cwd(), 'uploads/temp'),
+      path.resolve(config.storage.localUploadDir, 'meetings'),
+      path.resolve(config.storage.localUploadDir, 'notes'),
+      path.resolve(config.storage.localUploadDir, 'temp'),
+    ];
+    for (const d of requiredDirs) {
+      if (!fs.existsSync(d)) {
+        fs.mkdirSync(d, { recursive: true });
+      }
+    }
+  } catch (err: any) {
+    console.warn('[App] Warning creating upload directories:', err.message);
+  }
 
   // Security & standard middlewares
   app.use(helmet({ contentSecurityPolicy: false }));

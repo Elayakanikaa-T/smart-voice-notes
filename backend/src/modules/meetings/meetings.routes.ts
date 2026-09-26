@@ -9,13 +9,19 @@ import { summariesController } from '../summaries/summaries.controller.js';
 
 const router = Router();
 
+import fs from 'fs';
+
 // Multer: store meeting audio in /uploads/meetings
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, path.resolve(process.cwd(), 'uploads/meetings'));
+    const uploadDir = path.resolve(process.cwd(), 'uploads/meetings');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname) || '.webm';
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
