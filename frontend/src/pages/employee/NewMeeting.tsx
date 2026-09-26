@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Mic, Square, Upload, Loader2, AlertCircle, ArrowLeft,
-  Volume2, Sparkles, FileAudio, Languages
+  Volume2, Sparkles, FileAudio, Languages, Wand2
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -21,6 +21,7 @@ export default function NewMeeting() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [language, setLanguage] = useState('en-US');
+  const [isTranscribingWithAI, setIsTranscribingWithAI] = useState(false);
   
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -30,8 +31,8 @@ export default function NewMeeting() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
-  const accumulatedTranscriptRef = useRef<string>('');
-  const sessionFinalTranscriptRef = useRef<string>('');
+  const baseSavedTranscriptRef = useRef<string>('');
+  const currentSessionTranscriptRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const navigate = useNavigate();
 
@@ -41,14 +42,17 @@ export default function NewMeeting() {
       isRecordingRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.abort(); } catch {}
       }
     };
   }, []);
 
   const initLiveRecognition = (lang = language) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.warn('[NewMeeting STT] Web Speech API not supported in this browser.');
+      return;
+    }
 
     try {
       if (recognitionRef.current) {
@@ -60,19 +64,19 @@ export default function NewMeeting() {
       rec.lang = lang;
 
       rec.onresult = (event: any) => {
+        let sessionFinal = '';
         let interim = '';
-        let currentFinal = '';
         for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            currentFinal += (currentFinal ? ' ' : '') + piece.trim();
+            sessionFinal += (sessionFinal ? ' ' : '') + piece.trim();
           } else {
             interim += (interim ? ' ' : '') + piece.trim();
           }
         }
-        sessionFinalTranscriptRef.current = currentFinal;
-        const prefix = accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '';
-        const combined = (prefix + (currentFinal ? currentFinal + ' ' : '') + interim).trim();
+        currentSessionTranscriptRef.current = sessionFinal;
+        const prefix = baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '';
+        const combined = (prefix + (sessionFinal ? sessionFinal + ' ' : '') + interim).trim();
         if (combined) {
           setLiveTranscript(combined);
         }
@@ -83,17 +87,17 @@ export default function NewMeeting() {
       };
 
       rec.onend = () => {
-        if (sessionFinalTranscriptRef.current) {
-          accumulatedTranscriptRef.current = (
-            (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
-            sessionFinalTranscriptRef.current
+        if (currentSessionTranscriptRef.current) {
+          baseSavedTranscriptRef.current = (
+            (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 
+            currentSessionTranscriptRef.current
           ).trim();
-          sessionFinalTranscriptRef.current = '';
+          currentSessionTranscriptRef.current = '';
         }
         if (isRecordingRef.current) {
           setTimeout(() => {
             if (isRecordingRef.current) initLiveRecognition(lang);
-          }, 100);
+          }, 150);
         }
       };
 
@@ -110,8 +114,8 @@ export default function NewMeeting() {
       setAudioBlob(null);
       setAudioUrl(null);
       setLiveTranscript('');
-      accumulatedTranscriptRef.current = '';
-      sessionFinalTranscriptRef.current = '';
+      baseSavedTranscriptRef.current = '';
+      currentSessionTranscriptRef.current = '';
       isRecordingRef.current = true;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -163,16 +167,41 @@ export default function NewMeeting() {
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
       }
-      if (sessionFinalTranscriptRef.current) {
-        accumulatedTranscriptRef.current = (
-          (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
-          sessionFinalTranscriptRef.current
+      if (currentSessionTranscriptRef.current) {
+        baseSavedTranscriptRef.current = (
+          (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 
+          currentSessionTranscriptRef.current
         ).trim();
-        sessionFinalTranscriptRef.current = '';
-        if (accumulatedTranscriptRef.current) {
-          setLiveTranscript(accumulatedTranscriptRef.current);
-        }
+        currentSessionTranscriptRef.current = '';
       }
+      if (baseSavedTranscriptRef.current) {
+        setLiveTranscript(baseSavedTranscriptRef.current);
+      }
+    }
+  };
+
+  const handleTranscribeWithAI = async () => {
+    const targetAudio = mode === 'record' ? audioBlob : selectedFile;
+    if (!targetAudio) return;
+    setIsTranscribingWithAI(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', targetAudio, 'meeting_audio.webm');
+      formData.append('language', language);
+      formData.append('title', title || 'Meeting Recording');
+
+      const { data } = await api.post('/transcription/transcribe', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (data.data?.transcript) {
+        setLiveTranscript(data.data.transcript);
+        baseSavedTranscriptRef.current = data.data.transcript;
+      }
+    } catch (err: any) {
+      console.warn('AI transcription error:', err);
+    } finally {
+      setIsTranscribingWithAI(false);
     }
   };
 
@@ -478,9 +507,24 @@ export default function NewMeeting() {
               <span className="text-xs text-emerald-400 font-bold flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-400" /> Exact Speech-to-Text Transcript (Editable)
               </span>
-              <span className="text-[11px] text-slate-400">
-                {isRecording ? '🔴 Listening in real time...' : 'You can review or manually edit this transcript before saving'}
-              </span>
+              <div className="flex items-center gap-2">
+                {isRecording && (
+                  <span className="text-emerald-400 text-xs flex items-center gap-1 animate-pulse">
+                    ● Recording & Transcribing...
+                  </span>
+                )}
+                {(audioBlob || selectedFile) && !isRecording && (
+                  <button
+                    type="button"
+                    onClick={handleTranscribeWithAI}
+                    disabled={isTranscribingWithAI}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 rounded-lg text-emerald-300 text-[11px] font-bold transition-colors"
+                  >
+                    {isTranscribingWithAI ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                    <span>{isTranscribingWithAI ? 'Transcribing Audio...' : 'AI Transcribe Audio'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <textarea

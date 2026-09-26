@@ -1,6 +1,7 @@
-﻿import { Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { TranscriptModel } from '../../models/index.js';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware.js';
+import { getSTTProvider } from '../../services/ai/providers/sttProvider.js';
 
 export class TranscriptionController {
   async getTranscript(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -38,6 +39,38 @@ export class TranscriptionController {
       next(error);
     }
   }
+
+  async transcribeAudio(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const file = (req as any).file;
+      const audioPath = file?.path || req.body.audioUrl;
+      const language = req.body.language || 'en';
+      const title = req.body.title || 'Voice Note Recording';
+
+      if (!audioPath) {
+        res.status(400).json({ success: false, error: 'No audio file or URL provided for transcription.' });
+        return;
+      }
+
+      const stt = getSTTProvider();
+      const result = await stt.transcribe(audioPath, { language, title });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          transcript: result.rawText,
+          rawText: result.rawText,
+          language: result.language,
+          confidence: result.confidence,
+          durationSeconds: result.durationSeconds,
+          segments: result.segments,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message || 'Transcription failed.' });
+    }
+  }
 }
 
 export const transcriptionController = new TranscriptionController();
+

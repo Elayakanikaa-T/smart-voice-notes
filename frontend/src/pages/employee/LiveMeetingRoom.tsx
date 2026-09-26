@@ -139,10 +139,25 @@ export const LiveMeetingRoom: React.FC = () => {
       }
     };
 
-    recognition.start();
+    let isLiveActive = true;
+
+    recognition.onend = () => {
+      if (isLiveActive && !isMuted) {
+        try {
+          recognition.start();
+        } catch {}
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch {}
 
     return () => {
-      recognition.stop();
+      isLiveActive = false;
+      try {
+        recognition.stop();
+      } catch {}
     };
   }, [socket, isMuted, language]);
 

@@ -226,19 +226,19 @@ export class MeetingsService {
           meetingId,
           status: 'done',
           fullText: exactTranscriptText || '',
-          segments: exactSegments || (exactTranscriptText ? [{ speaker: 'Speaker', start: 0, end: 0, text: exactTranscriptText }] : []),
+          segments: exactSegments || (exactTranscriptText ? [{ speaker: 'Speaker 1', start: 0, end: 0, text: exactTranscriptText }] : []),
         },
       },
       { upsert: true }
     );
 
-    // If no transcript provided from client, enqueue worker to transcribe
-    if (!exactTranscriptText || !exactTranscriptText.trim()) {
-      await meetingQueue.add('process-meeting', {
-        meetingId,
-        audioUrl,
-      });
-    }
+    // Enqueue worker to transcribe (if needed) and generate summary, decisions, and action items
+    await meetingQueue.add('process-meeting', {
+      meetingId,
+      audioUrl,
+      exactTranscriptText,
+      exactSegments,
+    });
 
     return { queued: true, message: 'Audio and speech-to-text transcript saved successfully.' };
   }

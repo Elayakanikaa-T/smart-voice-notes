@@ -93,8 +93,8 @@ export default function MeetingDetail() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
-  const accumulatedTranscriptRef = useRef<string>('');
-  const sessionFinalTranscriptRef = useRef<string>('');
+  const baseSavedTranscriptRef = useRef<string>('');
+  const currentSessionTranscriptRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
   const liveVideoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
@@ -151,7 +151,10 @@ export default function MeetingDetail() {
   // Speech Recognition setup for exact speech matching
   const initLiveRecognition = (lang = recordingLanguage) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.warn('[MeetingDetail STT] Web Speech API not supported.');
+      return;
+    }
 
     try {
       if (recognitionRef.current) {
@@ -163,19 +166,19 @@ export default function MeetingDetail() {
       rec.lang = lang;
 
       rec.onresult = (event: any) => {
+        let sessionFinal = '';
         let interim = '';
-        let currentFinal = '';
-        for (let i = event.results.length - 1; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            currentFinal += (currentFinal ? ' ' : '') + piece.trim();
+            sessionFinal += (sessionFinal ? ' ' : '') + piece.trim();
           } else {
             interim += (interim ? ' ' : '') + piece.trim();
           }
         }
-        sessionFinalTranscriptRef.current = currentFinal;
-        const prefix = accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '';
-        const combined = (prefix + (currentFinal ? currentFinal + ' ' : '') + interim).trim();
+        currentSessionTranscriptRef.current = sessionFinal;
+        const prefix = baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '';
+        const combined = (prefix + (sessionFinal ? sessionFinal + ' ' : '') + interim).trim();
         if (combined) {
           setLiveTranscript(combined);
         }
@@ -186,17 +189,17 @@ export default function MeetingDetail() {
       };
 
       rec.onend = () => {
-        if (sessionFinalTranscriptRef.current) {
-          accumulatedTranscriptRef.current = (
-            (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + 
-            sessionFinalTranscriptRef.current
+        if (currentSessionTranscriptRef.current) {
+          baseSavedTranscriptRef.current = (
+            (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 
+            currentSessionTranscriptRef.current
           ).trim();
-          sessionFinalTranscriptRef.current = '';
+          currentSessionTranscriptRef.current = '';
         }
         if (isRecordingRef.current) {
           setTimeout(() => {
             if (isRecordingRef.current) initLiveRecognition(lang);
-          }, 100);
+          }, 150);
         }
       };
 
@@ -230,8 +233,8 @@ export default function MeetingDetail() {
       setRecordedBlob(null);
       setRecordedAudioUrl(null);
       setLiveTranscript('');
-      accumulatedTranscriptRef.current = '';
-      sessionFinalTranscriptRef.current = '';
+      baseSavedTranscriptRef.current = '';
+      currentSessionTranscriptRef.current = '';
       isRecordingRef.current = true;
 
       const constraints: MediaStreamConstraints = type === 'video'
@@ -292,6 +295,16 @@ export default function MeetingDetail() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
+      }
+      if (currentSessionTranscriptRef.current) {
+        baseSavedTranscriptRef.current = (
+          (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 
+          currentSessionTranscriptRef.current
+        ).trim();
+        currentSessionTranscriptRef.current = '';
+      }
+      if (baseSavedTranscriptRef.current) {
+        setLiveTranscript(baseSavedTranscriptRef.current);
       }
     }
   };
@@ -679,8 +692,8 @@ export default function MeetingDetail() {
                     setRecordedBlob(null);
                     setRecordedAudioUrl(null);
                     setLiveTranscript('');
-                    accumulatedTranscriptRef.current = '';
-                    sessionFinalTranscriptRef.current = '';
+                    baseSavedTranscriptRef.current = '';
+                    currentSessionTranscriptRef.current = '';
                   }}
                   disabled={audioUploading}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"

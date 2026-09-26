@@ -1,4 +1,4 @@
-﻿import { getSTTProvider } from '../providers/sttProvider.js';
+import { getSTTProvider } from '../providers/sttProvider.js';
 import { NoteJobPayload, jobQueue } from '../queue/jobQueue.js';
 import { TranscriptModel, AudioNoteModel } from '../../../models/index.js';
 import { logger } from '../../../utils/logger.js';
@@ -10,8 +10,12 @@ export async function processTranscriptionJob(payload: NoteJobPayload): Promise<
   try {
     await AudioNoteModel.findByIdAndUpdate(noteId, { $set: { status: 'transcribing', updated_at: new Date() } }).catch(() => {});
 
+    const noteDoc = await AudioNoteModel.findById(noteId).lean().catch(() => null);
+    const title = (noteDoc as any)?.title || 'Study Lecture';
+    const audioTarget = audioUrl || audioKey || `${noteId}.m4a`;
+
     const stt = getSTTProvider();
-    const result = await stt.transcribe(audioUrl || audioKey || 'sample-recording.m4a');
+    const result = await stt.transcribe(audioTarget, { title });
 
     await TranscriptModel.findOneAndUpdate(
       { note_id: noteId },
