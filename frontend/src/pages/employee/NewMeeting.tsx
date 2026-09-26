@@ -22,6 +22,8 @@ export default function NewMeeting() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [language, setLanguage] = useState('en-US');
   const [isTranscribingWithAI, setIsTranscribingWithAI] = useState(false);
+  const [sttStatus, setSttStatus] = useState<'idle' | 'listening' | 'unsupported' | 'error'>('idle');
+  const [sttError, setSttError] = useState('');
   
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +52,8 @@ export default function NewMeeting() {
   const initLiveRecognition = (lang = language) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn('[NewMeeting STT] Web Speech API not supported in this browser.');
+      setSttStatus('unsupported');
+      setSttError('Speech-to-text not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return;
     }
 
@@ -63,7 +66,13 @@ export default function NewMeeting() {
       rec.interimResults = true;
       rec.lang = lang;
 
+      rec.onstart = () => {
+        setSttStatus('listening');
+        setSttError('');
+      };
+
       rec.onresult = (event: any) => {
+        setSttStatus('listening');
         let fullSessionText = '';
         for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
@@ -81,6 +90,18 @@ export default function NewMeeting() {
 
       rec.onerror = (e: any) => {
         console.warn('[NewMeeting STT] status:', e.error);
+        if (e.error === 'not-allowed') {
+          setSttStatus('error');
+          setSttError('Microphone permission denied for speech recognition.');
+        } else if (e.error === 'network') {
+          setSttStatus('error');
+          setSttError('Network error — speech-to-text requires internet connection.');
+        } else if (e.error === 'no-speech') {
+          // Normal, keep listening
+        } else {
+          setSttStatus('error');
+          setSttError(`Speech recognition error: ${e.error}`);
+        }
       };
 
       rec.onend = () => {
@@ -100,8 +121,9 @@ export default function NewMeeting() {
 
       rec.start();
       recognitionRef.current = rec;
-    } catch (e) {
-      console.warn('[NewMeeting STT] failed:', e);
+    } catch (e: any) {
+      setSttStatus('error');
+      setSttError(`Failed to start speech recognition: ${e.message || e}`);
     }
   };
 
@@ -114,6 +136,8 @@ export default function NewMeeting() {
       baseSavedTranscriptRef.current = '';
       currentSessionTranscriptRef.current = '';
       isRecordingRef.current = true;
+      setSttStatus('idle');
+      setSttError('');
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
@@ -450,9 +474,21 @@ export default function NewMeeting() {
                   <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Live Speech Recognition:
                   </span>
-                  <p className="text-xs text-slate-200 italic min-h-[28px]">
-                    {liveTranscript || 'Listening to your voice...'}
-                  </p>
+                  {sttStatus === 'listening' && (
+                    <p className="text-xs text-slate-200 italic min-h-[28px]">
+                      {liveTranscript || 'Listening to your voice...'}
+                    </p>
+                  )}
+                  {sttStatus === 'idle' && (
+                    <p className="text-xs text-yellow-400 min-h-[28px]">
+                      Starting speech recognition...
+                    </p>
+                  )}
+                  {(sttStatus === 'unsupported' || sttStatus === 'error') && (
+                    <p className="text-xs text-rose-400 min-h-[28px]">
+                      ⚠️ {sttError || 'Speech recognition not available.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -505,9 +541,14 @@ export default function NewMeeting() {
                 <Sparkles className="w-4 h-4 text-emerald-400" /> Exact Speech-to-Text Transcript (Editable)
               </span>
               <div className="flex items-center gap-2">
-                {isRecording && (
+                {isRecording && sttStatus === 'listening' && (
                   <span className="text-emerald-400 text-xs flex items-center gap-1 animate-pulse">
                     ● Recording & Transcribing...
+                  </span>
+                )}
+                {isRecording && (sttStatus === 'unsupported' || sttStatus === 'error') && (
+                  <span className="text-rose-400 text-xs flex items-center gap-1">
+                    ⚠️ {sttError || 'STT unavailable'}
                   </span>
                 )}
                 {(audioBlob || selectedFile) && !isRecording && (

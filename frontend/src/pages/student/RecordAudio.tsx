@@ -18,6 +18,8 @@ export default function RecordAudio() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [language, setLanguage] = useState('en-US');
   const [isTranscribingWithAI, setIsTranscribingWithAI] = useState(false);
+  const [sttStatus, setSttStatus] = useState<'idle' | 'listening' | 'unsupported' | 'error'>('idle');
+  const [sttError, setSttError] = useState('');
   const [result, setResult] = useState<{ noteId: string; transcript?: string } | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
@@ -47,7 +49,8 @@ export default function RecordAudio() {
   const initRecognition = (lang = language) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn('[SpeechRecognition] Browser Web Speech API not supported.');
+      setSttStatus('unsupported');
+      setSttError('Speech-to-text not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return;
     }
 
@@ -61,7 +64,13 @@ export default function RecordAudio() {
       recognition.maxAlternatives = 1;
       recognition.lang = lang;
 
+      recognition.onstart = () => {
+        setSttStatus('listening');
+        setSttError('');
+      };
+
       recognition.onresult = (event: any) => {
+        setSttStatus('listening');
         let fullSessionText = '';
         for (let i = 0; i < event.results.length; ++i) {
           const piece = event.results[i][0].transcript;
@@ -79,6 +88,18 @@ export default function RecordAudio() {
 
       recognition.onerror = (event: any) => {
         console.warn('[SpeechRecognition] event status:', event.error);
+        if (event.error === 'not-allowed') {
+          setSttStatus('error');
+          setSttError('Microphone permission denied for speech recognition. Please allow it in browser settings.');
+        } else if (event.error === 'network') {
+          setSttStatus('error');
+          setSttError('Network error — speech-to-text requires internet connection.');
+        } else if (event.error === 'no-speech') {
+          // No speech detected — this is normal, just keep listening
+        } else {
+          setSttStatus('error');
+          setSttError(`Speech recognition error: ${event.error}`);
+        }
       };
 
       recognition.onend = () => {
@@ -100,8 +121,9 @@ export default function RecordAudio() {
 
       recognition.start();
       recognitionRef.current = recognition;
-    } catch (e) {
-      console.warn('[SpeechRecognition] init failed:', e);
+    } catch (e: any) {
+      setSttStatus('error');
+      setSttError(`Failed to start speech recognition: ${e.message || e}`);
     }
   };
 
@@ -128,6 +150,8 @@ export default function RecordAudio() {
       setRecordState('recording');
       setTimer(0);
       setLiveTranscript('');
+      setSttStatus('idle');
+      setSttError('');
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => setTimer(t => t + 1), 1000) as unknown as number;
 
@@ -397,9 +421,14 @@ export default function RecordAudio() {
                 <Sparkles className="w-3.5 h-3.5 animate-spin" /> Live Speech-to-Text Transcript (Editable)
               </span>
               <div className="flex items-center gap-2">
-                {recordState === 'recording' && (
+                {recordState === 'recording' && sttStatus === 'listening' && (
                   <span className="text-emerald-400 flex items-center gap-1 animate-pulse">
                     ● Listening & Transcribing...
+                  </span>
+                )}
+                {recordState === 'recording' && sttStatus === 'idle' && (
+                  <span className="text-yellow-400 flex items-center gap-1 animate-pulse">
+                    ● Starting speech recognition...
                   </span>
                 )}
                 {recordState === 'stopped' && audioBlob && (
@@ -415,13 +444,22 @@ export default function RecordAudio() {
                 )}
               </div>
             </div>
+
+            {/* Show STT errors/warnings */}
+            {(sttStatus === 'unsupported' || sttStatus === 'error') && sttError && (
+              <div className="p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{sttError}</span>
+              </div>
+            )}
+
             <textarea
               value={liveTranscript}
               onChange={(e) => {
                 setLiveTranscript(e.target.value);
                 baseSavedTranscriptRef.current = e.target.value;
               }}
-              placeholder="Speech-to-text transcript will appear here in real-time as you speak. You can also type or edit text directly."
+              placeholder={recordState === 'recording' ? 'Speak now... your words will appear here in real-time.' : 'Speech-to-text transcript will appear here when you record. You can also type or edit text directly.'}
               className="w-full h-28 bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-sm text-slate-200 resize-none focus:outline-none focus:border-blue-500 placeholder-slate-600 leading-relaxed font-sans"
             />
           </div>

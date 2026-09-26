@@ -30,7 +30,7 @@ export function resolveAudioFilePath(audioPathOrUrl: string): string | null {
     return audioPathOrUrl;
   }
 
-  const clean = audioPathOrUrl.replace(/^[\\\/]+/, '');
+  const clean = audioPathOrUrl.replace(/^[\\/]+/, '');
   const candidates = [
     path.resolve(process.cwd(), clean),
     path.resolve(process.cwd(), 'uploads', clean),
@@ -63,57 +63,33 @@ function getMimeTypeFromExt(filePath: string): string {
   }
 }
 
+/**
+ * Helper: sleep for given ms (used for retry backoff)
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * MockSTTProvider — returns an EMPTY result (no fake text).
+ * This is only used as an absolute last resort when no real API is available.
+ */
 export class MockSTTProvider implements ISTTProvider {
   async transcribe(audioPathOrUrl: string, options?: { language?: string; title?: string }): Promise<STTResult> {
-    logger.info(`[STT:Mock] Generating speech-to-text transcript for ${audioPathOrUrl}`);
-    await new Promise(resolve => setTimeout(resolve, 250));
-
-    const topic = options?.title || 'Speech-to-Text Transcription';
-    const sampleSegments: TranscriptSegmentDTO[] = [
-      {
-        start: 0.0,
-        end: 4.5,
-        text: `Welcome everyone to this session regarding ${topic}.`,
-        speaker: 'Speaker 1',
-        confidence: 0.98,
-      },
-      {
-        start: 4.8,
-        end: 11.2,
-        text: `Today we are discussing key principles, actionable requirements, and optimization steps in detail.`,
-        speaker: 'Speaker 1',
-        confidence: 0.97,
-      },
-      {
-        start: 11.5,
-        end: 18.0,
-        text: `Make sure all operational parameters and deliverables are noted and reviewed systematically.`,
-        speaker: 'Speaker 1',
-        confidence: 0.96,
-      },
-      {
-        start: 18.3,
-        end: 25.0,
-        text: `Let us prioritize the highest impact action items and complete the core evaluation criteria effectively.`,
-        speaker: 'Speaker 1',
-        confidence: 0.99,
-      },
-    ];
-
-    const rawText = sampleSegments.map(s => s.text).join(' ');
-
+    logger.warn(`[STT:Mock] No real STT API available. Returning empty transcript for: ${audioPathOrUrl}`);
     return {
-      rawText,
+      rawText: '',
       language: options?.language || 'en',
-      confidence: 0.97,
-      durationSeconds: 25,
-      segments: sampleSegments,
+      confidence: 0,
+      durationSeconds: 0,
+      segments: [],
     };
   }
 }
 
 export class GeminiSTTProvider implements ISTTProvider {
   private apiKey: string;
+  private maxRetries = 3;
 
   constructor() {
     this.apiKey = config.ai.geminiApiKey;
@@ -121,23 +97,22 @@ export class GeminiSTTProvider implements ISTTProvider {
 
   async transcribe(audioPathOrUrl: string, options?: { language?: string; title?: string }): Promise<STTResult> {
     if (!this.apiKey) {
-      logger.warn('[STT:Gemini] GEMINI_API_KEY is not set, falling back to mock provider.');
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+      logger.warn('[STT:Gemini] GEMINI_API_KEY is not set. Cannot transcribe.');
+      throw new Error('GEMINI_API_KEY is not configured. Audio transcription unavailable.');
     }
 
     const resolved = resolveAudioFilePath(audioPathOrUrl);
     if (!resolved || !fs.existsSync(resolved)) {
-      logger.warn(`[STT:Gemini] Local audio file not found at ${audioPathOrUrl}, falling back.`);
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+      logger.warn(`[STT:Gemini] Local audio file not found at ${audioPathOrUrl}`);
+      throw new Error(`Audio file not found: ${audioPathOrUrl}`);
     }
 
-    try {
-      logger.info(`[STT:Gemini] Transcribing audio with Gemini 1.5 Flash: ${resolved}`);
-      const audioBuffer = fs.readFileSync(resolved);
-      const base64Audio = audioBuffer.toString('base64');
-      const mimeType = getMimeTypeFromExt(resolved);
+    logger.info(`[STT:Gemini] Transcribing audio with Gemini 1.5 Flash: ${resolved}`);
+    const audioBuffer = fs.readFileSync(resolved);
+    const base64Audio = audioBuffer.toString('base64');
+    const mimeType = getMimeTypeFromExt(resolved);
 
-      const prompt = `You are a professional speech-to-text transcription engine. Transcribe the following spoken audio completely and accurately.
+    const prompt = `You are a professional speech-to-text transcription engine. Transcribe the following spoken audio completely and accurately.
 Output JSON strictly conforming to this schema:
 {
   "rawText": "Full word-for-word transcript of the spoken speech",
@@ -154,88 +129,108 @@ Output JSON strictly conforming to this schema:
   ]
 }`;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
-      const body = {
-        contents: [
-          {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64Audio,
-                },
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`;
+    const body = {
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Audio,
               },
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
+            },
+            {
+              text: prompt,
+            },
+          ],
         },
-      };
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      },
+    };
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini STT API error (${res.status}): ${errText}`);
-      }
-
-      const data: any = await res.json();
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      
-      let rawText = '';
-      let segments: TranscriptSegmentDTO[] = [];
-      let parsedLanguage = options?.language || 'en';
-      let parsedDuration = 30;
-
+    // Retry with exponential backoff for transient errors (503 overload, 429 rate limit)
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-        const parsed = JSON.parse(cleaned);
-        rawText = parsed.rawText || parsed.transcript || parsed.text || '';
-        parsedLanguage = parsed.language || options?.language || 'en';
-        parsedDuration = Number(parsed.durationSeconds) || 30;
-        if (Array.isArray(parsed.segments)) {
-          segments = parsed.segments.map((s: any) => ({
-            start: Number(s.start) || 0,
-            end: Number(s.end) || 0,
-            text: s.text || '',
-            speaker: s.speaker || 'Speaker 1',
-            confidence: Number(s.confidence) || 0.98,
-          }));
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (res.status === 503 || res.status === 429) {
+          const errText = await res.text();
+          lastError = new Error(`Gemini API overloaded (${res.status}): ${errText}`);
+          logger.warn(`[STT:Gemini] Attempt ${attempt}/${this.maxRetries} failed with ${res.status}. Retrying...`);
+          await sleep(Math.pow(2, attempt) * 1000); // 2s, 4s, 8s
+          continue;
         }
-      } catch {
-        rawText = content.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
-      }
 
-      if (!rawText.trim()) {
-        rawText = content.trim() || 'Audio transcribed successfully.';
-      }
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Gemini STT API error (${res.status}): ${errText}`);
+        }
 
-      return {
-        rawText: rawText.trim(),
-        language: parsedLanguage,
-        confidence: 0.98,
-        durationSeconds: parsedDuration,
-        segments: segments.length > 0 ? segments : [{
-          start: 0,
-          end: parsedDuration,
-          text: rawText.trim(),
-          speaker: 'Speaker 1',
+        const data: any = await res.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        let rawText = '';
+        let segments: TranscriptSegmentDTO[] = [];
+        let parsedLanguage = options?.language || 'en';
+        let parsedDuration = 30;
+
+        try {
+          const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+          const parsed = JSON.parse(cleaned);
+          rawText = parsed.rawText || parsed.transcript || parsed.text || '';
+          parsedLanguage = parsed.language || options?.language || 'en';
+          parsedDuration = Number(parsed.durationSeconds) || 30;
+          if (Array.isArray(parsed.segments)) {
+            segments = parsed.segments.map((s: any) => ({
+              start: Number(s.start) || 0,
+              end: Number(s.end) || 0,
+              text: s.text || '',
+              speaker: s.speaker || 'Speaker 1',
+              confidence: Number(s.confidence) || 0.98,
+            }));
+          }
+        } catch {
+          rawText = content.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
+        }
+
+        if (!rawText.trim()) {
+          rawText = content.trim() || '';
+        }
+
+        return {
+          rawText: rawText.trim(),
+          language: parsedLanguage,
           confidence: 0.98,
-        }],
-      };
-    } catch (err: any) {
-      logger.error(`[STT:Gemini] Transcription error: ${err.message}`);
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+          durationSeconds: parsedDuration,
+          segments: segments.length > 0 ? segments : rawText.trim() ? [{
+            start: 0,
+            end: parsedDuration,
+            text: rawText.trim(),
+            speaker: 'Speaker 1',
+            confidence: 0.98,
+          }] : [],
+        };
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < this.maxRetries) {
+          logger.warn(`[STT:Gemini] Attempt ${attempt}/${this.maxRetries} failed: ${err.message}. Retrying...`);
+          await sleep(Math.pow(2, attempt) * 1000);
+        }
+      }
     }
+
+    // All retries exhausted — throw error, do NOT fall back to mock/fake text
+    logger.error(`[STT:Gemini] All ${this.maxRetries} attempts failed: ${lastError?.message}`);
+    throw lastError || new Error('Gemini STT transcription failed after all retries.');
   }
 }
 
@@ -254,13 +249,13 @@ export class WhisperSTTProvider implements ISTTProvider {
       if (config.ai.geminiApiKey) {
         return new GeminiSTTProvider().transcribe(audioPathOrUrl, options);
       }
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+      throw new Error('No STT API key configured (neither OpenAI nor Gemini).');
     }
 
     const resolved = resolveAudioFilePath(audioPathOrUrl);
     if (!resolved || !fs.existsSync(resolved)) {
       logger.error(`[STT:Whisper] Audio file not found at path: ${audioPathOrUrl}`);
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+      throw new Error(`Audio file not found: ${audioPathOrUrl}`);
     }
 
     try {
@@ -300,7 +295,7 @@ export class WhisperSTTProvider implements ISTTProvider {
       if (config.ai.geminiApiKey) {
         return new GeminiSTTProvider().transcribe(audioPathOrUrl, options);
       }
-      return new MockSTTProvider().transcribe(audioPathOrUrl, options);
+      throw err;
     }
   }
 }
@@ -313,6 +308,7 @@ export class HybridSTTProvider implements ISTTProvider {
     if (config.ai.openaiApiKey) {
       return new WhisperSTTProvider().transcribe(audioPathOrUrl, options);
     }
+    logger.warn('[STT:Hybrid] No API keys configured. Returning empty transcript.');
     return new MockSTTProvider().transcribe(audioPathOrUrl, options);
   }
 }
