@@ -140,9 +140,29 @@ export function createApp(): express.Application {
     console.warn('[App] Could not start background services:', err.message);
   }
 
-  // Fallback for React Router (must be before notFoundHandler)
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
+  // Root & Fallback handlers (serves frontend if built locally, or returns API status on standalone cloud servers like Render)
+  app.get('/', (_req, res) => {
+    const indexPath = path.join(frontendPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    return res.status(200).json({
+      success: true,
+      service: 'Smart Voice Note Application API',
+      status: 'online',
+      version: '1.0.0',
+      apiPrefix: config.apiPrefix,
+      documentation: '/api-docs',
+      health: '/health',
+    });
+  });
+
+  app.get('*', (req, res, next) => {
+    const indexPath = path.join(frontendPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    return next();
   });
 
   // Error handling for unmatched API routes
