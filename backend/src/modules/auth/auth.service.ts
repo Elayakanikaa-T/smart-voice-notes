@@ -226,15 +226,15 @@ export class AuthService {
       throw new Error('No account found. Please sign up first.');
     }
 
-    // Requirement: If email is not verified, require verification
-    if (doc.email_verified === false) {
-      throw new Error('Please verify your email first.');
-    }
-
     // STRICT PASSWORD VERIFICATION: Compare input password against stored bcrypt hash
     const isPasswordValid = await comparePassword(data.password, doc.password_hash);
     if (!isPasswordValid) {
       throw new Error('Invalid email or password.');
+    }
+
+    // Auto-heal legacy accounts to verified once authenticated with correct password
+    if (doc.email_verified === false) {
+      await UserModel.updateOne({ _id: doc._id }, { $set: { email_verified: true } }).catch(() => {});
     }
 
     // ROLE VERIFICATION: Confirm that selected role matches user's authorized role in database

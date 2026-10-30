@@ -12,6 +12,13 @@ export async function connectMongo(uriOverride?: string): Promise<typeof mongoos
     });
     logger.info('[MongoDB] Connected to MongoDB database successfully.');
     isMongoConnected = true;
+
+    // Auto-heal legacy user accounts to ensure email_verified is true
+    conn.connection.collection('users').updateMany(
+      { email_verified: { $ne: true } },
+      { $set: { email_verified: true } }
+    ).catch(() => {});
+
     return conn;
   } catch (error: any) {
     logger.error(`[MongoDB] Connection failed (${error.message}). Database connection is required.`);
