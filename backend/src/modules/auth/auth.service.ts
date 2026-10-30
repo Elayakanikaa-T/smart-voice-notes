@@ -60,10 +60,8 @@ export class AuthService {
     } catch (emailErr: any) {
       otpStore.delete(emailNormalized);
       logger.error(`[AuthService] Failed to send OTP email to ${emailNormalized}: ${emailErr.message}`);
-      throw new Error(
-        'We could not deliver the verification code to this email address. ' +
-        'Please check the address is correct and try again, or contact support if the problem persists.'
-      );
+      const msg = emailErr?.message || 'We could not deliver the verification code. Please check your SMTP configuration.';
+      throw new Error(msg);
     }
 
     return {

@@ -1,37 +1,61 @@
 /**
  * Email Service using Nodemailer
- * IMPORTANT: If EMAIL_HOST is not configured, sendOTPEmail will THROW — not silently no-op.
- * This prevents anyone from signing up without owning the email address.
+ * Supports Gmail Service (auto port 465 SSL) and custom SMTP.
+ * Strips whitespace/spaces from App Passwords to prevent copy-paste errors.
  */
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
 
-const isSmtpConfigured =
-  !!process.env.EMAIL_HOST &&
-  !!process.env.EMAIL_USER &&
-  process.env.EMAIL_USER !== 'your-gmail-address@gmail.com' &&
-  !!process.env.EMAIL_PASS &&
-  process.env.EMAIL_PASS !== 'your-16-char-app-password';
+export function getEmailTransporter() {
+  const user = (process.env.EMAIL_USER || '').trim();
+  const rawPass = (process.env.EMAIL_PASS || '').trim();
+  // Strip any spaces Google puts in 16-char app passwords (e.g., "abcd efgh ijkl mnop" -> "abcdefghijklmnop")
+  const pass = rawPass.replace(/\s+/g, '');
 
-if (!isSmtpConfigured) {
-  logger.warn(
-    '[EmailService] ⚠️  SMTP is NOT configured. ' +
-    'Set EMAIL_HOST, EMAIL_USER, EMAIL_PASS in .env to enable real OTP delivery. ' +
-    'All signup requests will be REJECTED until SMTP is configured.'
-  );
+  const isPlaceholder =
+    !user ||
+    !pass ||
+    user === 'your-gmail-address@gmail.com' ||
+    pass === 'your-16-char-app-password';
+
+  if (isPlaceholder) {
+    return null;
+  }
+
+  const host = (process.env.EMAIL_HOST || '').trim();
+  const isGmail = user.endsWith('@gmail.com') || host.includes('gmail');
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
+  }
+
+  return nodemailer.createTransport({
+    host: host || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_SECURE === 'true' || process.env.EMAIL_PORT === '465',
+    auth: {
+      user,
+      pass,
+    },
+  });
 }
 
-const transporter = isSmtpConfigured
-  ? nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER || '',
-        pass: process.env.EMAIL_PASS || '',
-      },
-    })
-  : null;
+// Log status on startup
+const initialTransporter = getEmailTransporter();
+if (!initialTransporter) {
+  logger.warn(
+    '[EmailService] ⚠️  SMTP is NOT configured. ' +
+    'Set EMAIL_USER and EMAIL_PASS in environment to enable real OTP delivery.'
+  );
+} else {
+  logger.info('[EmailService] ✅ SMTP transporter initialized successfully.');
+}
 
 interface ReminderEmailOptions {
   to: string;
@@ -45,6 +69,7 @@ interface ReminderEmailOptions {
 }
 
 export async function sendReminderEmail(opts: ReminderEmailOptions): Promise<void> {
+  const transporter = getEmailTransporter();
   if (!transporter) {
     logger.debug(`[EmailService] No SMTP configured, skipping email to ${opts.to}`);
     return;
@@ -105,15 +130,12 @@ export interface OTPEmailOptions {
 
 export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
   const recipient = opts.toName || 'User';
-  // NOTE: Do NOT log the actual OTP value in production — it would expose it in server logs.
-  logger.info(`[EmailService] Sending OTP email to ${opts.to}`);
+  logger.info(`[EmailService] Preparing OTP delivery to ${opts.to}`);
 
+  const transporter = getEmailTransporter();
   if (!transporter) {
-    // SECURITY: If SMTP is not configured we MUST throw — a silent no-op would allow
-    // anyone to complete signup without ever receiving a real verification email.
     throw new Error(
-      'Email service is not configured on this server. ' +
-      'Please set EMAIL_HOST, EMAIL_USER, and EMAIL_PASS in the backend .env file.'
+      'Email service is not configured on the server. Please set EMAIL_USER and EMAIL_PASS environment variables.'
     );
   }
 
@@ -150,9 +172,11 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
 </body>
 </html>`;
 
+  const sender = (process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@smartvoicenotes.com').trim();
+
   try {
     await transporter.sendMail({
-      from: `"Smart Voice Notes" <${process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@smartvoicenotes.com'}>`,
+      from: `"Smart Voice Notes" <${sender}>`,
       to: opts.to,
       subject: `Your Smart Voice Notes Verification Code: ${opts.otp}`,
       html,
@@ -160,6 +184,6 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
     logger.info(`[EmailService] OTP email sent successfully to ${opts.to}`);
   } catch (err: any) {
     logger.error(`[EmailService] Failed to send OTP email: ${err.message}`);
+    throw new Error(`Email delivery failed: ${err.message}`);
   }
 }
-

@@ -9,7 +9,17 @@ import {
   CheckCircle2, 
   KeyRound,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  Sparkles,
+  GraduationCap,
+  Briefcase,
+  ShieldCheck,
+  Mail,
+  Lock,
+  User,
+  Radio,
+  FileText,
+  BrainCircuit
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -18,7 +28,7 @@ type AuthView = 'login' | 'signup' | 'otp' | 'forgot_password' | 'forgot_passwor
 type UserRole = 'student' | 'employee' | 'admin';
 
 export default function Login() {
-  const [view, setView] = useState<AuthView>('login');
+  const [view, setView] = useState<AuthView>('signup');
   const [role, setRole] = useState<UserRole>('employee');
 
   // Input states
@@ -234,207 +244,361 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col justify-center items-center px-4 py-10 selection:bg-indigo-500/30 selection:text-white font-sans">
+    <div className="min-h-screen w-full bg-[#070b14] text-slate-100 flex font-sans selection:bg-indigo-500/30 selection:text-white">
       
-      {/* Centered Main Authentication Box (Instagram Card Style) */}
-      <div className="w-full max-w-[385px] space-y-3.5">
+      {/* ─── LEFT PANEL: Hero & Product Showcase (Full height on lg+ screens) ─── */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-5/12 flex-col justify-between p-12 relative overflow-hidden bg-gradient-to-br from-[#0c1222] via-[#090f1d] to-[#060913] border-r border-slate-800/80">
         
-        {/* Main Card */}
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl px-8 py-8 shadow-2xl relative">
-          
-          {/* Brand Header & Logo */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-indigo-600/25 mb-3">
+        {/* Ambient background glow orbs */}
+        <div className="absolute top-0 -left-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-10 right-0 w-80 h-80 bg-violet-600/15 rounded-full blur-[100px] pointer-events-none" />
+
+        {/* Top: Brand Header */}
+        <div className="relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-indigo-600/30">
               <Mic className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Smart Voice Notes</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              {view === 'login' && 'Log in to continue to your workspace'}
-              {view === 'signup' && 'Sign up to create your account'}
-              {view === 'otp' && 'Verify your Gmail address'}
-              {(view === 'forgot_password' || view === 'forgot_password_otp') && 'Reset your password'}
+            <div>
+              <span className="text-xl font-extrabold tracking-tight text-white block">Smart Voice Notes</span>
+              <span className="text-xs text-indigo-400 font-medium">AI Audio & Intelligence Platform</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Hero Value Proposition */}
+        <div className="relative z-10 my-auto py-8 space-y-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            Next-Gen Speech Intelligence
+          </div>
+
+          <h1 className="text-3xl xl:text-4xl font-extrabold text-white leading-tight tracking-tight">
+            Turn every spoken word into <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-200">actionable knowledge.</span>
+          </h1>
+
+          <p className="text-sm text-slate-400 leading-relaxed max-w-md">
+            Whether in lectures or corporate boardrooms, record audio with real-time transcription, automated summaries, study flashcards, and verified security.
+          </p>
+
+          {/* Feature Highlight Cards */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm">
+              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                <Radio className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Live Transcription & Audio Notes</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">Studio-grade multi-speaker recognition with instant voice replay.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm">
+              <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                <BrainCircuit className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">AI Study Guide & Automatic Quizzes</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">Extract core concepts, formula sheets, and interactive practice tests.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Employee Action Items & Tasks</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">Structured meeting minutes, automated deadlines, and task tracking.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Trust Badge */}
+        <div className="relative z-10 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Gmail verified accounts & encrypted data</span>
+          </div>
+          <span className="text-[11px] text-slate-500">v1.0.1 Enterprise</span>
+        </div>
+      </div>
+
+      {/* ─── RIGHT PANEL: Full-Page Authentication Form Workspace ─── */}
+      <div className="w-full lg:w-1/2 xl:w-7/12 min-h-screen flex flex-col justify-between p-6 sm:p-10 lg:p-16 relative overflow-y-auto">
+        
+        {/* Top Navigation Bar: Mobile Logo & Quick View Switcher */}
+        <div className="w-full max-w-xl mx-auto flex items-center justify-between pb-6">
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+              <Mic className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-sm text-white">Smart Voice Notes</span>
+          </div>
+
+          <div className="ml-auto text-xs text-slate-400 flex items-center gap-2">
+            {view === 'login' ? (
+              <>
+                <span>Don't have an account?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView('signup');
+                    clearFeedback();
+                  }}
+                  className="font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1.5 px-3 rounded-lg hover:bg-indigo-600/10 border border-indigo-500/20"
+                >
+                  Create Account
+                </button>
+              </>
+            ) : (
+              <>
+                <span>Already registered?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView('login');
+                    clearFeedback();
+                  }}
+                  className="font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1.5 px-3 rounded-lg hover:bg-indigo-600/10 border border-indigo-500/20"
+                >
+                  Sign In
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Center Container: Spacious Form */}
+        <div className="w-full max-w-xl mx-auto my-auto py-4">
+          
+          {/* Header Title & Subtitle */}
+          <div className="mb-8">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              {view === 'signup' && 'Create your account'}
+              {view === 'login' && 'Welcome back'}
+              {view === 'otp' && 'Verify your email'}
+              {view === 'forgot_password' && 'Reset your password'}
+              {view === 'forgot_password_otp' && 'Set a new password'}
+            </h2>
+            <p className="text-sm text-slate-400 mt-2">
+              {view === 'signup' && 'Sign up with your Gmail address to access voice intelligence and smart notes.'}
+              {view === 'login' && 'Sign in to access your notes, meetings, and AI study guides.'}
+              {view === 'otp' && `Enter the 6-digit confirmation code delivered to ${email}`}
+              {view === 'forgot_password' && "Enter your registered Gmail address and we'll send a recovery code."}
+              {view === 'forgot_password_otp' && 'Enter the reset code received in your inbox and your new password.'}
             </p>
           </div>
 
-          {/* User Role Selector (3 Roles: Student, Employee, Admin) */}
+          {/* Role Selector Tabs (Only on Signup and Login) */}
           {(view === 'login' || view === 'signup') && (
-            <div className="mb-5">
-              <div className="flex p-1 bg-slate-950/90 rounded-xl border border-slate-800 text-xs font-semibold">
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-slate-300 mb-2">Select Your Workspace Role</label>
+              <div className="grid grid-cols-3 gap-2.5 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800">
                 <button
                   type="button"
                   onClick={() => handleRoleChange('student')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                  className={`py-3 px-3 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-2 text-xs font-bold ${
                     role === 'student'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
-                  Student
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Student</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleRoleChange('employee')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                  className={`py-3 px-3 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-2 text-xs font-bold ${
                     role === 'employee'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
-                  Employee
+                  <Briefcase className="w-4 h-4" />
+                  <span>Employee</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleRoleChange('admin')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                  className={`py-3 px-3 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-2 text-xs font-bold ${
                     role === 'admin'
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
-                  Admin
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Admin</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Error Message */}
+          {/* Feedback Alerts */}
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
-              <span className="leading-snug">{error}</span>
+            <div className="mb-5 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs sm:text-sm flex items-start gap-3 animate-in fade-in">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400 mt-0.5" />
+              <div className="leading-relaxed font-medium">{error}</div>
             </div>
           )}
 
-          {/* Success Message */}
           {success && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
-              <span className="leading-snug">{success}</span>
+            <div className="mb-5 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs sm:text-sm flex items-start gap-3 animate-in fade-in">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400 mt-0.5" />
+              <div className="leading-relaxed font-medium">{success}</div>
             </div>
           )}
 
-          {/* VIEW 1: LOGIN FORM */}
+          {/* ─── FORM 1: LOGIN ─── */}
           {view === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-3.5">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Gmail address"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Registered Gmail</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="yourname@gmail.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
               </div>
 
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">Password</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setView('forgot_password');
+                      clearFeedback();
+                    }}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-11 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-1"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer pt-3 mt-4"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Logging In...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing In...</span>
                   </>
                 ) : (
-                  <span>Log In as {role.charAt(0).toUpperCase() + role.slice(1)}</span>
+                  <span>Sign In as {role.charAt(0).toUpperCase() + role.slice(1)}</span>
                 )}
               </button>
-
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView('forgot_password');
-                    clearFeedback();
-                  }}
-                  className="text-[11px] text-slate-400 hover:text-indigo-400 transition-colors font-medium"
-                >
-                  Forgot password?
-                </button>
-              </div>
             </form>
           )}
 
-          {/* VIEW 2: SIGNUP FORM */}
+          {/* ─── FORM 2: FULL-PAGE SIGNUP (STEP 1) ─── */}
           {view === 'signup' && (
-            <form onSubmit={handleRequestSignupOtp} className="space-y-3">
+            <form onSubmit={handleRequestSignupOtp} className="space-y-4">
               <div>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Gmail address (name@gmail.com)"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password (min 8 characters)"
-                  className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Full Name</label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Jane Doe"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
               </div>
 
               <div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm Password"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Gmail Address</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="yourname@gmail.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+                <span className="text-[11px] text-slate-500 mt-1 block">A real verification code will be sent to this Gmail address.</span>
               </div>
 
-              {/* Administrator Secret Key Field (Shown only when Admin is selected) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Min 8 characters"
+                      className="w-full pl-10 pr-10 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Confirm Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repeat password"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Administrator Secret Key Field */}
               {role === 'admin' && (
-                <div className="pt-1">
-                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-semibold mb-1">
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Administrator Authorization Key</span>
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex items-center gap-2 text-xs text-amber-300 font-semibold mb-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                    <span>Administrator Authorization Key Required</span>
                   </div>
                   <input
                     type="password"
@@ -442,45 +606,45 @@ export default function Login() {
                     value={adminSecretKey}
                     onChange={(e) => setAdminSecretKey(e.target.value)}
                     placeholder="Enter Admin Invite Key"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                   />
-                  <span className="text-[10px] text-slate-500 block mt-1">Admin accounts require verification key.</span>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer pt-3 mt-4"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Sending Code...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Sending Verification Code to Gmail...</span>
                   </>
                 ) : (
-                  <span>Sign Up as {role.charAt(0).toUpperCase() + role.slice(1)}</span>
+                  <span>Continue to Email Verification →</span>
                 )}
               </button>
             </form>
           )}
 
-          {/* VIEW 3: OTP VERIFICATION (SIGNUP) */}
+          {/* ─── FORM 3: OTP VERIFICATION (STEP 2) ─── */}
           {view === 'otp' && (
-            <form onSubmit={handleCompleteSignup} className="space-y-4">
-              <div className="text-center space-y-1">
-                <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 mx-auto flex items-center justify-center">
-                  <KeyRound className="w-5 h-5" />
+            <form onSubmit={handleCompleteSignup} className="space-y-6">
+              <div className="p-6 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 mx-auto flex items-center justify-center shadow-lg shadow-indigo-500/10">
+                  <KeyRound className="w-7 h-7" />
                 </div>
-                <p className="text-xs text-slate-300">
-                  Enter the 6-digit code sent to <strong className="text-white">{email}</strong>
-                </p>
+                <div>
+                  <h3 className="text-base font-bold text-white">Check Your Gmail Inbox</h3>
+                  <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
+                    We delivered a 6-digit confirmation code to <strong className="text-white underline">{email}</strong>. Please enter it below.
+                  </p>
+                </div>
               </div>
 
-{/* OTP is sent to the user's real email — no dev hint exposed */}
-
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-medium text-slate-300 text-center">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-300 text-center">
                   6-Digit Verification Code
                 </label>
                 <div className="flex justify-center">
@@ -494,79 +658,76 @@ export default function Login() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                     placeholder="· · · · · ·"
-                    className="w-full max-w-xs py-3 px-4 bg-slate-950/80 border-2 border-indigo-500/50 rounded-xl text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
+                    className="w-full max-w-sm py-3.5 px-4 bg-slate-950 border-2 border-indigo-500/50 rounded-2xl text-center text-3xl font-mono tracking-[0.6em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/20 transition-all shadow-inner"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs pt-1">
                 <button
                   type="button"
                   onClick={() => {
                     setView('signup');
                     clearFeedback();
                   }}
-                  className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]"
+                  className="text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors font-medium py-1 px-2 rounded-lg"
                 >
-                  <ArrowLeft className="w-3 h-3" /> Back
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to edit details
                 </button>
 
                 <button
                   type="button"
                   disabled={resendTimer > 0}
                   onClick={handleRequestSignupOtp}
-                  className="text-indigo-400 hover:text-indigo-300 text-[11px] disabled:opacity-50"
+                  className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors disabled:opacity-50 py-1 px-2 rounded-lg"
                 >
-                  {resendTimer > 0 ? `Resend (${resendTimer}s)` : 'Resend Code'}
+                  {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend Code'}
                 </button>
               </div>
 
               <button
                 type="submit"
                 disabled={loading || otp.length < 4}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Verifying...</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying Code & Creating Account...</span>
                   </>
                 ) : (
-                  <span>Verify & Create Account</span>
+                  <span>Verify Email & Access Dashboard</span>
                 )}
               </button>
             </form>
           )}
 
-          {/* VIEW 4: FORGOT PASSWORD REQUEST */}
+          {/* ─── FORM 4: FORGOT PASSWORD REQUEST ─── */}
           {view === 'forgot_password' && (
             <form onSubmit={handleRequestForgotOtp} className="space-y-4">
-              <div className="text-center space-y-1">
-                <h2 className="text-sm font-bold text-white">Trouble Logging In?</h2>
-                <p className="text-xs text-slate-400">
-                  Enter your registered Gmail address and we'll send you an OTP to reset your password.
-                </p>
-              </div>
-
               <div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Registered Gmail address"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Registered Gmail</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="yourname@gmail.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Sending Reset Code...</span>
                   </>
                 ) : (
@@ -581,7 +742,7 @@ export default function Login() {
                     setView('login');
                     clearFeedback();
                   }}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  className="text-xs text-slate-400 hover:text-white transition-colors"
                 >
                   ← Back to Login
                 </button>
@@ -589,18 +750,11 @@ export default function Login() {
             </form>
           )}
 
-          {/* VIEW 5: FORGOT PASSWORD RESET (ENTER OTP + NEW PASSWORD) */}
+          {/* ─── FORM 5: FORGOT PASSWORD RESET ─── */}
           {view === 'forgot_password_otp' && (
-            <form onSubmit={handleResetPassword} className="space-y-3.5">
-              <div className="text-center space-y-1">
-                <h2 className="text-sm font-bold text-white">Set New Password</h2>
-                <p className="text-xs text-slate-400">
-                  Enter the code sent to <strong className="text-white">{email}</strong>
-                </p>
-              </div>
-
+            <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[11px] font-medium text-slate-300 text-center">
+                <label className="block text-xs font-semibold text-slate-300 text-center">
                   6-Digit Reset Code
                 </label>
                 <div className="flex justify-center">
@@ -613,56 +767,64 @@ export default function Login() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                     placeholder="· · · · · ·"
-                    className="w-full max-w-xs py-2.5 px-4 bg-slate-950/80 border-2 border-indigo-500/50 rounded-xl text-center text-xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
+                    className="w-full max-w-sm py-3 px-4 bg-slate-950 border-2 border-indigo-500/50 rounded-2xl text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
                   />
                 </div>
               </div>
 
               <div>
-                <input
-                  type="password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New Password (min 8 chars)"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">New Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New Password (min 8 chars)"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               <div>
-                <input
-                  type="password"
-                  required
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  placeholder="Confirm New Password"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Confirm New Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Confirm New Password"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Updating Password...</span>
                   </>
                 ) : (
-                  <span>Reset Password</span>
+                  <span>Reset Password & Sign In</span>
                 )}
               </button>
 
-              <div className="text-center pt-1">
+              <div className="text-center pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setView('login');
                     clearFeedback();
                   }}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  className="text-xs text-slate-400 hover:text-white transition-colors"
                 >
                   ← Back to Login
                 </button>
@@ -672,37 +834,9 @@ export default function Login() {
 
         </div>
 
-        {/* Secondary Card (Instagram Style "Don't have an account? Sign up" / "Have an account? Log in") */}
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl py-4 px-6 text-center shadow-md">
-          {view === 'login' ? (
-            <p className="text-xs text-slate-400">
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setView('signup');
-                  clearFeedback();
-                }}
-                className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors ml-1 cursor-pointer"
-              >
-                Sign up
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-slate-400">
-              Have an account?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setView('login');
-                  clearFeedback();
-                }}
-                className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors ml-1 cursor-pointer"
-              >
-                Log in
-              </button>
-            </p>
-          )}
+        {/* Footer */}
+        <div className="w-full max-w-xl mx-auto pt-6 text-center text-xs text-slate-500">
+          © {new Date().getFullYear()} Smart Voice Notes. All rights reserved.
         </div>
 
       </div>
