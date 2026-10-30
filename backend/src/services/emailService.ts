@@ -70,7 +70,7 @@ async function sendViaBrevo(opts: { to: string; toName?: string; subject: string
   if (!apiKey) return false;
 
   try {
-    const senderEmail = (process.env.EMAIL_FROM || 'no-reply@smartvoicenotes.com').trim();
+    const senderEmail = (process.env.BREVO_SENDER || process.env.EMAIL_FROM || process.env.EMAIL_USER || 'elayakanikaa@gmail.com').trim();
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
@@ -88,15 +88,20 @@ async function sendViaBrevo(opts: { to: string; toName?: string; subject: string
 
     if (!res.ok) {
       const errText = await res.text();
-      logger.warn(`[EmailService] Brevo API returned error (${res.status}): ${errText}`);
-      return false;
+      logger.error(`[EmailService] Brevo API error (${res.status}): ${errText}`);
+      let parsedMsg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMsg = parsed.message || errText;
+      } catch {}
+      throw new Error(`Brevo delivery failed: ${parsedMsg}`);
     }
 
     logger.info(`[EmailService] ✉️ Email delivered successfully via Brevo HTTPS API to ${opts.to}`);
     return true;
   } catch (err: any) {
-    logger.warn(`[EmailService] Brevo HTTP dispatch failed: ${err.message}`);
-    return false;
+    logger.error(`[EmailService] Brevo HTTP dispatch failed: ${err.message}`);
+    throw err;
   }
 }
 
@@ -269,15 +274,15 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
 
   const subject = `Your Smart Voice Notes Verification Code: ${opts.otp}`;
 
-  // 1. Try Resend HTTP API (Port 443 - works everywhere including Render Free Tier!)
-  if (process.env.RESEND_API_KEY) {
-    const sent = await sendViaResend({ to: opts.to, subject, html });
+  // 1. Try Brevo HTTP API (Port 443 - delivers to ANY recipient worldwide without custom domain!)
+  if (process.env.BREVO_API_KEY) {
+    const sent = await sendViaBrevo({ to: opts.to, toName: recipient, subject, html });
     if (sent) return;
   }
 
-  // 2. Try Brevo HTTP API (Port 443)
-  if (process.env.BREVO_API_KEY) {
-    const sent = await sendViaBrevo({ to: opts.to, toName: recipient, subject, html });
+  // 2. Try Resend HTTP API (Port 443 - works for domain-verified domains or sandbox owner)
+  if (process.env.RESEND_API_KEY) {
+    const sent = await sendViaResend({ to: opts.to, subject, html });
     if (sent) return;
   }
 
