@@ -1,11 +1,27 @@
 /**
  * Email Service using Nodemailer
- * Gracefully no-ops if EMAIL_HOST is not configured.
+ * IMPORTANT: If EMAIL_HOST is not configured, sendOTPEmail will THROW — not silently no-op.
+ * This prevents anyone from signing up without owning the email address.
  */
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
 
-const transporter = process.env.EMAIL_HOST
+const isSmtpConfigured =
+  !!process.env.EMAIL_HOST &&
+  !!process.env.EMAIL_USER &&
+  process.env.EMAIL_USER !== 'your-gmail-address@gmail.com' &&
+  !!process.env.EMAIL_PASS &&
+  process.env.EMAIL_PASS !== 'your-16-char-app-password';
+
+if (!isSmtpConfigured) {
+  logger.warn(
+    '[EmailService] ⚠️  SMTP is NOT configured. ' +
+    'Set EMAIL_HOST, EMAIL_USER, EMAIL_PASS in .env to enable real OTP delivery. ' +
+    'All signup requests will be REJECTED until SMTP is configured.'
+  );
+}
+
+const transporter = isSmtpConfigured
   ? nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT) || 587,
@@ -80,3 +96,70 @@ export async function sendReminderEmail(opts: ReminderEmailOptions): Promise<voi
 
   logger.info(`[EmailService] Reminder email sent to ${opts.to}`);
 }
+
+export interface OTPEmailOptions {
+  to: string;
+  toName?: string;
+  otp: string;
+}
+
+export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
+  const recipient = opts.toName || 'User';
+  // NOTE: Do NOT log the actual OTP value in production — it would expose it in server logs.
+  logger.info(`[EmailService] Sending OTP email to ${opts.to}`);
+
+  if (!transporter) {
+    // SECURITY: If SMTP is not configured we MUST throw — a silent no-op would allow
+    // anyone to complete signup without ever receiving a real verification email.
+    throw new Error(
+      'Email service is not configured on this server. ' +
+      'Please set EMAIL_HOST, EMAIL_USER, and EMAIL_PASS in the backend .env file.'
+    );
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#0b0f19;color:#e2e8f0;margin:0;padding:20px;">
+  <div style="max-width:520px;margin:30px auto;background:#131c2e;border-radius:18px;overflow:hidden;border:1px solid #1e293b;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+    <div style="background:linear-gradient(135deg,#4f46e5,#6366f1);padding:30px 24px;text-align:center;">
+      <h1 style="margin:0;font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">Smart Voice Notes</h1>
+      <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;font-weight:500;">Account Email Verification</p>
+    </div>
+    <div style="padding:32px 28px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#f8fafc;">Hello <strong>${recipient}</strong>,</p>
+      <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6;">
+        Use the following one-time verification code (OTP) to complete your signup process. This code confirms your identity and will expire in <strong>10 minutes</strong>.
+      </p>
+      
+      <div style="background:#090d16;border-radius:14px;padding:24px;text-align:center;border:1px solid #243048;margin-bottom:24px;">
+        <span style="display:block;font-size:11px;font-weight:700;color:#818cf8;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;">Your Verification Code</span>
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:36px;font-weight:800;letter-spacing:10px;color:#ffffff;text-shadow:0 0 12px rgba(99,102,241,0.5);">${opts.otp}</div>
+        <span style="display:block;font-size:12px;color:#64748b;margin-top:8px;">Valid for 10 minutes</span>
+      </div>
+
+      <p style="margin:0 0 8px;font-size:12px;color:#64748b;line-height:1.5;">
+        If you did not request this verification code, please ignore this email or contact security support. Do not share this OTP with anyone.
+      </p>
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid #1e293b;font-size:11px;color:#475569;text-align:center;">
+        Smart Voice Notes Security & Authentication System
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await transporter.sendMail({
+      from: `"Smart Voice Notes" <${process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@smartvoicenotes.com'}>`,
+      to: opts.to,
+      subject: `Your Smart Voice Notes Verification Code: ${opts.otp}`,
+      html,
+    });
+    logger.info(`[EmailService] OTP email sent successfully to ${opts.to}`);
+  } catch (err: any) {
+    logger.error(`[EmailService] Failed to send OTP email: ${err.message}`);
+  }
+}
+

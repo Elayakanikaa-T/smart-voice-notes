@@ -13,7 +13,10 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string, role?: 'student' | 'admin' | 'employee') => Promise<User>;
-  signup: (name: string, email: string, password: string, role?: 'student' | 'admin' | 'employee') => Promise<User>;
+  sendOtp: (email: string, name?: string, purpose?: string) => Promise<{ success: boolean; message: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
+  signup: (name: string, email: string, password: string, role?: 'student' | 'admin' | 'employee', otp?: string, adminSecretKey?: string) => Promise<User>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   updateUser: (updatedData: Partial<User>) => void;
   logout: () => void;
   loading: boolean;
@@ -46,8 +49,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return u;
   };
 
-  const signup = async (name: string, email: string, password: string, role: 'student' | 'admin' | 'employee' = 'student'): Promise<User> => {
-    const { data } = await api.post('/auth/signup', { name, email, password, role });
+  const sendOtp = async (email: string, name?: string, purpose = 'signup'): Promise<{ success: boolean; message: string; devOtp?: string }> => {
+    const { data } = await api.post('/auth/send-otp', { email, name, purpose });
+    return data;
+  };
+
+  const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; message: string }> => {
+    const { data } = await api.post('/auth/verify-otp', { email, otp });
+    return data;
+  };
+
+  const signup = async (
+    name: string, 
+    email: string, 
+    password: string, 
+    role: 'student' | 'admin' | 'employee' = 'student',
+    otp?: string,
+    adminSecretKey?: string
+  ): Promise<User> => {
+    const { data } = await api.post('/auth/signup', { name, email, password, role, otp, adminSecretKey });
     const { tokens, user: u } = data.data;
     const accessToken = tokens?.accessToken || data.data.accessToken;
     const refreshToken = tokens?.refreshToken || data.data.refreshToken;
@@ -58,6 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
     return u;
   };
+
+  const resetPassword = async (email: string, otp: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    const { data } = await api.post('/auth/reset-password', { email, otp, newPassword });
+    return data;
+  };
+
 
   const updateUser = (updatedData: Partial<User>) => {
     setUser(prev => {
@@ -77,10 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, signup, updateUser, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, sendOtp, verifyOtp, signup, resetPassword, updateUser, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
+
 }
 
 export function useAuth() {
