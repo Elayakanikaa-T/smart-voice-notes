@@ -21,6 +21,13 @@ export interface IUser extends Document<string> {
   preferred_language: string;
   theme_pref: 'dark' | 'light' | 'system';
   avatar_url?: string;
+  age?: number;
+  status?: string;
+  phone?: string;
+  gender?: string;
+  institution?: string;
+  grade_or_designation?: string;
+  bio?: string;
   settings: IUserSettings;
   last_login?: Date;
   created_at: Date;
@@ -50,6 +57,13 @@ export const UserSchema = new Schema<IUser>(
     preferred_language: { type: String, default: 'en' },
     theme_pref: { type: String, enum: ['dark', 'light', 'system'], default: 'system' },
     avatar_url: { type: String },
+    age: { type: Number, min: 1, max: 120 },
+    status: { type: String, default: 'Active' },
+    phone: { type: String, default: '' },
+    gender: { type: String, default: '' },
+    institution: { type: String, default: '' },
+    grade_or_designation: { type: String, default: '' },
+    bio: { type: String, default: '' },
     settings: { type: UserSettingsSchema, default: () => ({}) },
     last_login: { type: Date },
   },

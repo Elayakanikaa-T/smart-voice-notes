@@ -7,6 +7,13 @@ interface User {
   name: string;
   email: string;
   role: 'student' | 'admin' | 'employee';
+  age?: number;
+  status?: string;
+  phone?: string;
+  gender?: string;
+  institution?: string;
+  grade_or_designation?: string;
+  bio?: string;
 }
 
 interface AuthContextType {

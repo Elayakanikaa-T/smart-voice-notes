@@ -23,6 +23,7 @@ import Profile from './pages/student/Profile';
 // Admin Pages
 import AdminHome from './pages/admin/AdminHome';
 import AdminStudents from './pages/admin/AdminStudents';
+import AdminEmployees from './pages/admin/AdminEmployees';
 import AdminQuizCreator from './pages/admin/AdminQuizCreator';
 
 // Employee Meeting Portal Pages
@@ -60,6 +61,13 @@ function App() {
           <Route path="/meetings/live/:id" element={<GuestMeetingJoin />} />
           <Route path="/meetings/live/:id/room" element={<LiveMeetingRoom />} />
 
+          {/* Universal Profile Route for all logged-in roles */}
+          <Route element={<ProtectedRoute allowedRoles={['student', 'employee', 'admin']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Route>
+
           {/* Employee Meeting Portal Routes (accessible to employee and admin) */}
           <Route element={<ProtectedRoute allowedRoles={['employee', 'admin']} />}>
             <Route element={<AppLayout />}>
@@ -95,6 +103,7 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/admin" element={<AdminHome />} />
               <Route path="/admin/students" element={<AdminStudents />} />
+              <Route path="/admin/employees" element={<AdminEmployees />} />
               <Route path="/admin/subjects" element={<Subjects />} />
               <Route path="/admin/quizzes" element={<AdminQuizCreator />} />
               <Route path="/admin/profile" element={<Profile />} />

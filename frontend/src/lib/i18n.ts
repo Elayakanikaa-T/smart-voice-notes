@@ -19,6 +19,8 @@ const resources = {
       "flashcards": "Flashcards",
       "quizzes": "Quizzes",
       "record_audio": "Record Audio",
+      "students": "Manage Students",
+      "employees": "Manage Employees",
       // Add more as needed
     }
   },

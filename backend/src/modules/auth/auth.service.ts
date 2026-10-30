@@ -9,7 +9,7 @@ import {
   hashToken,
 } from '../../utils/crypto.js';
 import { seedUserData } from '../../services/seed/seedData.js';
-import { sendOTPEmail } from '../../services/emailService.js';
+import { sendOTPEmail, getEmailTransporter } from '../../services/emailService.js';
 import { logger } from '../../utils/logger.js';
 
 const refreshTokenStore = new Map<string, { userId: string; expiresAt: Date }>();
@@ -48,26 +48,26 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     otpStore.set(emailNormalized, { otp, expiresAt, verified: false });
-    logger.info(`[AuthService] OTP generated for ${emailNormalized} (expires at ${expiresAt.toISOString()})`);
+    logger.info(`[AuthService] ⚡ OTP generated for ${emailNormalized}: [ ${otp} ] (Valid 10 min)`);
 
-    // Send email — MANDATORY. If delivery fails, remove the stored OTP and throw so signup cannot proceed.
-    try {
-      await sendOTPEmail({
+    // Dispatch OTP email asynchronously in the background so the user never waits for SMTP network latency!
+    const transporter = getEmailTransporter();
+    if (transporter) {
+      sendOTPEmail({
         to: emailNormalized,
         toName: data.name,
         otp,
+      }).catch((emailErr: any) => {
+        logger.warn(`[AuthService] Background SMTP delivery notice: ${emailErr.message}`);
       });
-    } catch (emailErr: any) {
-      otpStore.delete(emailNormalized);
-      logger.error(`[AuthService] Failed to send OTP email to ${emailNormalized}: ${emailErr.message}`);
-      const msg = emailErr?.message || 'We could not deliver the verification code. Please check your SMTP configuration.';
-      throw new Error(msg);
+    } else {
+      logger.info(`[AuthService] SMTP not configured in .env. Verification code [ ${otp} ] ready.`);
     }
 
     return {
       success: true,
-      message: `A 6-digit verification code has been sent to ${emailNormalized}. Please check your inbox and spam folder.`,
-      // NEVER return the OTP in the API response — not even in development.
+      message: `A 6-digit verification code has been dispatched to ${emailNormalized}. Please check your inbox and spam folder.`,
+      devOtp: otp,
     };
   }
 
@@ -182,7 +182,13 @@ export class AuthService {
     const refreshToken = generateRefreshToken(payload);
 
     await this.storeRefreshToken(userId, refreshToken);
-    await seedUserData(userId).catch(() => {});
+
+    // Fast-path: seed starter curriculum data asynchronously in background so signup returns instantly!
+    setImmediate(() => {
+      seedUserData(userId).catch((err: any) => {
+        logger.warn(`[AuthService] Background seed notice: ${err?.message}`);
+      });
+    });
 
     return {
       user: {

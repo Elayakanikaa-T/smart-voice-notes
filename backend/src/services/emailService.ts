@@ -6,7 +6,17 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
 
-export function getEmailTransporter() {
+import dns from 'dns';
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  // Ignore
+}
+
+let cachedTransporter: nodemailer.Transporter | null = null;
+let lastTransporterKey = '';
+
+export function getEmailTransporter(): nodemailer.Transporter | null {
   const user = (process.env.EMAIL_USER || '').trim();
   const rawPass = (process.env.EMAIL_PASS || '').trim();
   // Strip any spaces Google puts in 16-char app passwords (e.g., "abcd efgh ijkl mnop" -> "abcdefghijklmnop")
@@ -22,28 +32,36 @@ export function getEmailTransporter() {
     return null;
   }
 
-  const host = (process.env.EMAIL_HOST || '').trim();
+  const host = (process.env.EMAIL_HOST || 'smtp.gmail.com').trim();
+  const port = Number(process.env.EMAIL_PORT) || 587;
   const isGmail = user.endsWith('@gmail.com') || host.includes('gmail');
+  const currentKey = `${user}:${pass}:${host}:${port}:${isGmail}`;
 
-  if (isGmail) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user,
-        pass,
-      },
-    });
+  if (cachedTransporter && lastTransporterKey === currentKey) {
+    return cachedTransporter;
   }
 
-  return nodemailer.createTransport({
-    host: host || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_SECURE === 'true' || process.env.EMAIL_PORT === '465',
+  // Explicitly configure host with family: 4 to completely eliminate Render ENETUNREACH IPv6 errors!
+  const options: any = {
+    host: isGmail ? 'smtp.gmail.com' : host,
+    port: isGmail ? 587 : port,
+    secure: isGmail ? false : (process.env.EMAIL_SECURE === 'true' || port === 465),
+    family: 4, // Force IPv4 — Render free tier does NOT route IPv6 (fixes connect ENETUNREACH)
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 6000,
+    greetingTimeout: 5000,
+    socketTimeout: 8000,
     auth: {
       user,
       pass,
     },
-  });
+  };
+
+  cachedTransporter = nodemailer.createTransport(options);
+  lastTransporterKey = currentKey;
+  return cachedTransporter;
 }
 
 // Log status on startup

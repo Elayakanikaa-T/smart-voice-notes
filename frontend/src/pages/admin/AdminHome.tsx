@@ -23,7 +23,8 @@ import {
   ShieldAlert,
   Send,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Briefcase
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -143,9 +144,9 @@ interface AdminComplaint {
 }
 
 export default function AdminHome() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'creator' | 'quizzes' | 'complaints'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'employees' | 'creator' | 'quizzes' | 'complaints'>('overview');
   
-  // Dashboard & Student State
+  // Dashboard & User State
   const [stats, setStats] = useState<AdminStats>({
     totalStudents: 0,
     totalAdmins: 1,
@@ -157,6 +158,7 @@ export default function AdminHome() {
     platformReadinessAvg: 85,
   });
   const [students, setStudents] = useState<StudentData[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterScore, setFilterScore] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [loading, setLoading] = useState(true);
@@ -252,6 +254,7 @@ export default function AdminHome() {
       });
 
       setStudents(studentList);
+      setEmployees(employeeList);
       setPublishedQuizzes(quizList);
     } catch (err) {
       console.error('Error fetching admin dashboard data:', err);
@@ -264,7 +267,7 @@ export default function AdminHome() {
     fetchAdminData();
   }, []);
 
-  // Student Actions
+  // User & Staff Actions
   const handleDeleteStudent = async (id: string, name: string) => {
     if (!window.confirm(`Are you sure you want to remove student "${name}"?`)) return;
     try {
@@ -272,6 +275,16 @@ export default function AdminHome() {
       fetchAdminData();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to remove student.');
+    }
+  };
+
+  const handleDeleteEmployee = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove employee account "${name}"?`)) return;
+    try {
+      await api.delete(`/admin/users/${id}`);
+      fetchAdminData();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to remove employee.');
     }
   };
 
@@ -463,7 +476,17 @@ export default function AdminHome() {
                 : 'bg-slate-950/60 text-slate-400 hover:text-white border border-slate-800'
             }`}
           >
-            <Users className="w-4 h-4" /> Student Progress ({students.length})
+            <Users className="w-4 h-4" /> Manage Students ({students.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('employees')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
+              activeTab === 'employees'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'bg-slate-950/60 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Briefcase className="w-4 h-4" /> Manage Employees ({employees.length})
           </button>
           <button
             onClick={() => setActiveTab('creator')}
@@ -789,6 +812,97 @@ export default function AdminHome() {
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: MANAGE EMPLOYEES */}
+      {/* ========================================================================= */}
+      {activeTab === 'employees' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Briefcase className="w-6 h-6 text-indigo-400" /> Manage Staff & Employees
+              </h2>
+              <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                Directory of registered employees, staff credentials, departments, and account control.
+              </p>
+            </div>
+          </div>
+
+          {/* Employees Table Container */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 shadow-xl overflow-hidden p-6 space-y-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                  <tr>
+                    <th className="p-3.5">Employee</th>
+                    <th className="p-3.5">Department / Role</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5">Contact Phone</th>
+                    <th className="p-3.5">Registered Date</th>
+                    <th className="p-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-500 animate-pulse">
+                        Loading employee directory...
+                      </td>
+                    </tr>
+                  ) : employees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-500">
+                        No employees registered yet. When users sign up as Employee, they will appear here.
+                      </td>
+                    </tr>
+                  ) : (
+                    employees.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white text-xs shadow-md">
+                              {emp.name?.[0]?.toUpperCase() || 'E'}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white text-sm">{emp.name}</div>
+                              <div className="text-[11px] text-slate-500">{emp.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-300">
+                          {emp.grade_or_designation || emp.institution || 'Staff Member'}
+                        </td>
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            {emp.status || 'Active'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-400">
+                          {emp.phone || <span className="text-slate-600 italic">Not set</span>}
+                        </td>
+                        <td className="p-3.5 text-slate-400">
+                          {new Date(emp.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors cursor-pointer"
+                            title="Remove Employee Account"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     ))

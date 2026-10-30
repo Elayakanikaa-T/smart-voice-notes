@@ -68,7 +68,28 @@ export function createApp(): express.Application {
 
   // Security & standard middlewares
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(cors({ origin: config.corsOrigin, credentials: true }));
+  app.use(
+    cors({
+      origin: (requestOrigin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, or same-origin)
+        if (!requestOrigin) return callback(null, true);
+        // Allow Vercel, Render, localhost, or specified CORS_ORIGIN
+        if (
+          config.corsOrigin === '*' ||
+          requestOrigin.includes('localhost') ||
+          requestOrigin.includes('vercel.app') ||
+          requestOrigin.includes('onrender.com') ||
+          requestOrigin === config.corsOrigin
+        ) {
+          return callback(null, requestOrigin);
+        }
+        return callback(null, requestOrigin);
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    })
+  );
   app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));

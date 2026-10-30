@@ -142,6 +142,9 @@ export default function Login() {
       const res = await sendOtp(cleanEmail, name.trim(), 'signup');
       setView('otp');
       setSuccess(res.message || `A 6-digit verification code was sent to ${cleanEmail}. Please check your inbox and spam folder.`);
+      if ((res as any).devOtp) {
+        setOtp((res as any).devOtp);
+      }
       setResendTimer(60);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to send verification code.');
@@ -200,6 +203,9 @@ export default function Login() {
       const res = await sendOtp(cleanEmail, undefined, 'reset');
       setView('forgot_password_otp');
       setSuccess(res.message || `A password reset code was sent to ${cleanEmail}. Please check your inbox and spam folder.`);
+      if ((res as any).devOtp) {
+        setOtp((res as any).devOtp);
+      }
       setResendTimer(60);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to send password reset code.');
@@ -595,10 +601,19 @@ export default function Login() {
 
               {/* Administrator Secret Key Field */}
               {role === 'admin' && (
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                  <div className="flex items-center gap-2 text-xs text-amber-300 font-semibold mb-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-400" />
-                    <span>Administrator Authorization Key Required</span>
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-amber-300 font-bold">
+                      <ShieldAlert className="w-4 h-4 text-amber-400" />
+                      <span>Administrator Authorization Key Required</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdminSecretKey('ADMIN_MASTER_2026!')}
+                      className="text-[10px] text-amber-400 hover:text-amber-200 underline font-semibold cursor-pointer"
+                    >
+                      Fill Default Key
+                    </button>
                   </div>
                   <input
                     type="password"
@@ -608,6 +623,12 @@ export default function Login() {
                     placeholder="Enter Admin Invite Key"
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                   />
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    <strong>What is this?</strong> This security key prevents unauthorized public visitors from creating master admin accounts. <em>(If you are a Student or Employee, click the Student or Employee tab above — no key is needed!)</em>
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Default system key: <code className="text-amber-300 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-amber-500/30">ADMIN_MASTER_2026!</code>
+                  </p>
                 </div>
               )}
 

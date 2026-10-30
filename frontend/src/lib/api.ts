@@ -1,9 +1,20 @@
 import axios from 'axios';
 
+const rawBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const cleanedBase = rawBase.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: cleanedBase,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Auto-wake Render backend in background on first load so cold-starts don't block users
+try {
+  const healthUrl = cleanedBase.replace(/\/api\/v1\/?$/, '') + '/health';
+  axios.get(healthUrl, { timeout: 12000 }).catch(() => {});
+} catch {
+  // Ignore
+}
 
 // Attach access token to every request
 api.interceptors.request.use((config) => {
