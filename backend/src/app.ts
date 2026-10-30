@@ -29,6 +29,7 @@ import learningPathRoutes from './modules/learning-path/learningPath.routes.js';
 import languagesRoutes from './modules/languages/languages.routes.js';
 import profileRoutes from './modules/profile/profile.routes.js';
 import { doubtChatRouter } from './modules/doubt-chat/doubt-chat.routes.js';
+import { complaintRouter } from './modules/complaints/complaint.routes.js';
 
 // Meeting Portal Routes
 import meetingsRoutes from './modules/meetings/meetings.routes.js';
@@ -129,6 +130,7 @@ export function createApp(): express.Application {
   v1.use('/shares', sharesRoutes);
   v1.use('/webhooks', webhooksRoutes);
   v1.use('/doubt-chat', doubtChatRouter);
+  v1.use('/complaints', complaintRouter);
 
   // ── Employee Meeting Portal ──────────────────────────────────────────────
   v1.use('/meetings', meetingsRoutes);

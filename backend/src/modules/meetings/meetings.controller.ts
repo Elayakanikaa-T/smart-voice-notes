@@ -10,6 +10,9 @@ export class MeetingsController {
         organizerId: req.user!.userId,
         participants: req.body.participants,
         scheduledAt: req.body.scheduledAt,
+        dueTime: req.body.dueTime,
+        agenda: req.body.agenda,
+        meetingLink: req.body.meetingLink,
       });
       res.status(201).json({ success: true, data: meeting });
     } catch (err: any) {

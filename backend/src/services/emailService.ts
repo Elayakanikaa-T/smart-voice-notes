@@ -187,3 +187,93 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
     throw new Error(`Email delivery failed: ${err.message}`);
   }
 }
+
+export interface MeetingInviteEmailOptions {
+  to: string;
+  toName?: string;
+  organizerName: string;
+  meetingTitle: string;
+  scheduledAt?: Date | string;
+  dueTime?: string;
+  agenda?: string;
+  meetingLink: string;
+}
+
+export async function sendMeetingInviteEmail(opts: MeetingInviteEmailOptions): Promise<void> {
+  const transporter = getEmailTransporter();
+  if (!transporter) {
+    logger.debug(`[EmailService] No SMTP configured, skipping invite email to ${opts.to}`);
+    return;
+  }
+
+  const dateFormatted = opts.scheduledAt
+    ? new Date(opts.scheduledAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : 'Immediate / Live Session';
+
+  const timeFormatted = opts.dueTime || 'Starting Now';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#070b14;color:#e2e8f0;margin:0;padding:24px;">
+  <div style="max-width:580px;margin:30px auto;background:#0d1526;border-radius:20px;overflow:hidden;border:1px solid #1e293b;box-shadow:0 25px 50px rgba(0,0,0,0.6);">
+    <div style="background:linear-gradient(135deg,#4f46e5,#6366f1);padding:32px 28px;text-align:left;">
+      <span style="display:inline-block;padding:4px 12px;background:rgba(255,255,255,0.15);border-radius:20px;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:12px;">Meeting Invitation</span>
+      <h1 style="margin:0;font-size:24px;font-weight:800;color:#ffffff;line-height:1.3;">${opts.meetingTitle}</h1>
+      <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Invited by <strong>${opts.organizerName}</strong></p>
+    </div>
+
+    <div style="padding:32px 28px;">
+      <p style="margin:0 0 20px;font-size:15px;color:#f8fafc;">
+        Hi ${opts.toName ? `<strong>${opts.toName}</strong>` : 'there'}, you've been invited to join a live meeting session on <strong>Smart Voice Notes</strong>.
+      </p>
+
+      <div style="background:#080d19;border-radius:14px;padding:20px;border:1px solid #1e293b;margin-bottom:24px;">
+        <div style="display:flex;margin-bottom:12px;">
+          <div style="margin-right:24px;">
+            <span style="font-size:11px;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:0.05em;display:block;">Scheduled Date</span>
+            <strong style="font-size:14px;color:#ffffff;">${dateFormatted}</strong>
+          </div>
+          <div>
+            <span style="font-size:11px;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:0.05em;display:block;">Time / Due</span>
+            <strong style="font-size:14px;color:#ffffff;">${timeFormatted}</strong>
+          </div>
+        </div>
+        ${opts.agenda ? `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid #1a2538;">
+          <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;display:block;">Agenda</span>
+          <p style="margin:4px 0 0;font-size:13px;color:#cbd5e1;line-height:1.5;">${opts.agenda}</p>
+        </div>` : ''}
+      </div>
+
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${opts.meetingLink}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;border-radius:12px;box-shadow:0 10px 20px rgba(79,70,229,0.35);">
+          Join Live Meeting Room →
+        </a>
+        <p style="margin:12px 0 0;font-size:12px;color:#64748b;">Or paste this link into your browser: <br/><a href="${opts.meetingLink}" style="color:#818cf8;word-break:break-all;">${opts.meetingLink}</a></p>
+      </div>
+
+      <div style="margin-top:28px;padding-top:20px;border-top:1px solid #1e293b;font-size:11px;color:#475569;text-align:center;">
+        Smart Voice Notes Meeting Intelligence & Audio Transcription Platform
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const sender = (process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@smartvoicenotes.com').trim();
+
+  try {
+    await transporter.sendMail({
+      from: `"${opts.organizerName} (via Smart Voice Notes)" <${sender}>`,
+      to: opts.to,
+      subject: `Meeting Invite: ${opts.meetingTitle}`,
+      html,
+    });
+    logger.info(`[EmailService] Meeting invite sent successfully to ${opts.to}`);
+  } catch (err: any) {
+    logger.warn(`[EmailService] Failed to send meeting invite to ${opts.to}: ${err.message}`);
+  }
+}
+

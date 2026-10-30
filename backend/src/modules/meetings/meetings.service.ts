@@ -6,6 +6,7 @@ import { ActionItemModel } from '../../models/actionItem.model.js';
 import { NotificationModel } from '../../models/meetingNotification.model.js';
 import { UserModel } from '../../models/user.model.js';
 import { meetingQueue } from '../../services/meetingQueue.js';
+import { sendMeetingInviteEmail } from '../../services/emailService.js';
 import { logger } from '../../utils/logger.js';
 
 export class MeetingsService {
@@ -14,26 +15,67 @@ export class MeetingsService {
     organizerId: string;
     participants?: { name: string; email: string; userId?: string }[];
     scheduledAt?: string;
+    dueTime?: string;
+    agenda?: string;
+    meetingLink?: string;
   }) {
+    // Populate userIds for participants if they already have an account
+    const cleanParticipants = (data.participants || []).map(p => ({
+      name: p.name || p.email.split('@')[0],
+      email: (p.email || '').toLowerCase().trim(),
+      userId: p.userId,
+    }));
+
+    if (cleanParticipants.length > 0) {
+      const emails = cleanParticipants.map(p => p.email);
+      const existingUsers = await UserModel.find({ email: { $in: emails } }).select('_id email').lean();
+      const emailToIdMap = new Map(existingUsers.map((u: any) => [u.email.toLowerCase(), u._id]));
+      cleanParticipants.forEach(p => {
+        if (!p.userId && emailToIdMap.has(p.email)) {
+          p.userId = emailToIdMap.get(p.email);
+        }
+      });
+    }
+
     const meeting = await MeetingModel.create({
       title: data.title,
       organizer: data.organizerId,
-      participants: data.participants || [],
+      participants: cleanParticipants,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : undefined,
+      dueTime: data.dueTime,
+      agenda: data.agenda,
+      meetingLink: data.meetingLink,
       status: 'scheduled',
     });
 
-    // Automatically send in-app notifications and invite link to organizer and participants
+    // Automatically send in-app notifications and invite emails to participants
     try {
       const organizerUser = await UserModel.findById(data.organizerId).lean();
+      const organizerName = (organizerUser as any)?.name || 'Team Lead';
       const usersToNotify = new Set<string>();
       usersToNotify.add(data.organizerId);
 
-      // Find user IDs for any participants by email if available
-      if (data.participants && data.participants.length > 0) {
-        const emails = data.participants.map(p => p.email.toLowerCase());
-        const foundUsers = await UserModel.find({ email: { $in: emails } }).select('_id').lean();
-        foundUsers.forEach((u: any) => usersToNotify.add(u._id));
+      cleanParticipants.forEach(p => {
+        if (p.userId) usersToNotify.add(p.userId);
+      });
+
+      // Send Real Email Invites to each participant email
+      const baseUrl = process.env.FRONTEND_URL || 'https://smart-voice-notes.onrender.com';
+      const actualLink = data.meetingLink || `${baseUrl}/meetings/live/${meeting._id}/room`;
+
+      for (const p of cleanParticipants) {
+        if (p.email) {
+          sendMeetingInviteEmail({
+            to: p.email,
+            toName: p.name,
+            organizerName,
+            meetingTitle: data.title,
+            scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : undefined,
+            dueTime: data.dueTime,
+            agenda: data.agenda,
+            meetingLink: actualLink,
+          }).catch(err => logger.warn(`[MeetingsService] Background invite failed for ${p.email}: ${err.message}`));
+        }
       }
 
       // Create notification for each user
@@ -113,9 +155,13 @@ export class MeetingsService {
     const query: any = {};
 
     if (role !== 'admin') {
+      const currentUser = await UserModel.findById(userId).select('email').lean();
+      const userEmail = (currentUser as any)?.email?.toLowerCase();
+
       query.$or = [
         { organizer: userId },
         { 'participants.userId': userId },
+        ...(userEmail ? [{ 'participants.email': userEmail }] : []),
       ];
     }
 

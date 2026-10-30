@@ -4,11 +4,11 @@ import {
   Briefcase, Search, Calendar, Clock, AlertCircle, 
   CheckCircle2, Loader2, Filter, ChevronRight, Mic,
   Users, Trash2, Send, Copy, Video, UploadCloud,
-  FileAudio, Plus
+  FileAudio, Plus, BookOpen, ShieldAlert, Check, Mail
 } from 'lucide-react';
 import api from '../../lib/api';
-
-
+import ComplaintModal from '../../components/ComplaintModal';
+import AppGuideModal from '../../components/AppGuideModal';
 
 interface Participant {
   userId?: string;
@@ -22,6 +22,9 @@ interface MeetingItem {
   organizer: string;
   participants: Participant[];
   scheduledAt?: string;
+  dueTime?: string;
+  agenda?: string;
+  meetingLink?: string;
   audioUrl?: string;
   status: 'scheduled' | 'recording' | 'processing' | 'done' | 'failed';
   created_at: string;
@@ -33,6 +36,21 @@ export default function Meetings() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
+  // Conduct Live Meeting Setup Modal
+  const [conductModalOpen, setConductModalOpen] = useState(false);
+  const [conductTitle, setConductTitle] = useState('');
+  const [conductDate, setConductDate] = useState('');
+  const [conductDueTime, setConductDueTime] = useState('');
+  const [conductAgenda, setConductAgenda] = useState('');
+  const [conductParticipants, setConductParticipants] = useState('');
+  const [conductPreviewId, setConductPreviewId] = useState('');
+  const [copiedConductLink, setCopiedConductLink] = useState(false);
+  const [conductError, setConductError] = useState('');
+
+  // Support & Guide modals
+  const [complaintModalOpen, setComplaintModalOpen] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+
   // Schedule / Quick Meeting Modal
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -103,19 +121,66 @@ export default function Meetings() {
     fetchMeetings();
   }, []);
 
-  // Conduct a meeting instantly: creates meeting & enters live room
-  const handleConductMeeting = async () => {
+  // Open setup dialog before conducting
+  const openConductModal = () => {
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const timeFormatted = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const previewId = 'm-' + Math.random().toString(36).slice(2, 10);
+
+    setConductTitle(`Product & Team Sync (${today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`);
+    setConductDate(dateStr);
+    setConductDueTime(`${timeFormatted} (45 mins)`);
+    setConductAgenda('Discuss active priorities, address roadblocks, review AI action items.');
+    setConductParticipants('');
+    setConductPreviewId(previewId);
+    setCopiedConductLink(false);
+    setConductError('');
+    setConductModalOpen(true);
+  };
+
+  // Launch live meeting and dispatch email invitations to participants
+  const handleLaunchConductMeeting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!conductTitle.trim()) {
+      setConductError('Please specify a title for the live meeting.');
+      return;
+    }
+
     setConductingLive(true);
+    setConductError('');
+
     try {
-      const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const parts = conductParticipants
+        .split(/[,\n]/)
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => ({
+          name: p.includes('@') ? p.split('@')[0] : p,
+          email: p,
+        }));
+
+      const origin = window.location.origin;
+      // Pre-generated live link
+      const liveLink = `${origin}/meetings/live/${conductPreviewId}/room`;
+
       const res = await api.post('/meetings', {
-        title: `Live Team Meeting (${dateStr})`,
-        participants: [],
+        title: conductTitle.trim(),
+        scheduledAt: conductDate ? new Date(conductDate).toISOString() : new Date().toISOString(),
+        dueTime: conductDueTime.trim() || undefined,
+        agenda: conductAgenda.trim() || undefined,
+        participants: parts,
+        meetingLink: liveLink,
       });
-      const newMeeting = res.data?.data;
-      navigate(`/meetings/live/${newMeeting._id}/room`);
+
+      const createdMeeting = res.data?.data;
+      const finalMeetingId = createdMeeting?._id || conductPreviewId;
+
+      setConductModalOpen(false);
+      // Immediately enter live meeting room as host
+      navigate(`/meetings/live/${finalMeetingId}/room`);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to start live meeting room.');
+      setConductError(err.response?.data?.error || err.message || 'Failed to conduct live meeting.');
     } finally {
       setConductingLive(false);
     }
@@ -288,12 +353,12 @@ export default function Meetings() {
             </p>
           </div>
 
-          {/* Action Buttons: Conduct Meeting & Upload Previous Recording */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Action Buttons: Conduct Meeting, Guide, Complaint Box & Uploads */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
-              onClick={handleConductMeeting}
+              onClick={openConductModal}
               disabled={conductingLive}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50 hover:scale-[1.02]"
             >
               {conductingLive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
               <span>Conduct Live Meeting</span>
@@ -304,7 +369,7 @@ export default function Meetings() {
                 setPastUploadError('');
                 setUploadPastModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
             >
               <UploadCloud className="w-4 h-4 text-indigo-400" />
               <span>Upload Past Recording</span>
@@ -312,7 +377,7 @@ export default function Meetings() {
 
             <Link
               to="/meetings/new"
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
             >
               <Mic className="w-4 h-4" />
               <span>Record In-Browser</span>
@@ -320,10 +385,28 @@ export default function Meetings() {
 
             <button
               onClick={() => setNewModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Schedule Meeting</span>
+              <span>Schedule</span>
+            </button>
+
+            <button
+              onClick={() => setGuideModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-3 rounded-2xl bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 font-bold text-xs transition-all cursor-pointer"
+              title="Step-by-Step Operator Guide"
+            >
+              <BookOpen className="w-4 h-4 text-indigo-400" />
+              <span>Guide</span>
+            </button>
+
+            <button
+              onClick={() => setComplaintModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-3 rounded-2xl bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 border border-rose-500/30 font-bold text-xs transition-all cursor-pointer"
+              title="Helpdesk & Complaint Box"
+            >
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
+              <span>Helpdesk</span>
             </button>
           </div>
         </div>
@@ -408,7 +491,7 @@ export default function Meetings() {
           </div>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              onClick={handleConductMeeting}
+              onClick={openConductModal}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
             >
               Conduct Live Meeting
@@ -807,6 +890,190 @@ export default function Meetings() {
           </div>
         </div>
       )}
+
+      {/* ─── Conduct Live Meeting Setup Modal (Configure Date, Due Time, Participants & Invites) ─── */}
+      {conductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center shadow-md">
+                  <Video className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-lg">Conduct Live Meeting</h3>
+                  <p className="text-xs text-slate-400">Configure schedule, due time, agenda & invite participants</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setConductModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {conductError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                <span>{conductError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLaunchConductMeeting} className="space-y-4">
+              {/* Meeting Title */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={conductTitle}
+                  onChange={(e) => setConductTitle(e.target.value)}
+                  placeholder="e.g. Q4 Strategy & AI Architecture Sync"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              {/* Date & Due / Start Time */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={conductDate}
+                    onChange={(e) => setConductDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Due / Start Time & Duration</label>
+                  <input
+                    type="text"
+                    required
+                    value={conductDueTime}
+                    onChange={(e) => setConductDueTime(e.target.value)}
+                    placeholder="e.g. 10:30 AM (45 mins)"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Agenda */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Agenda & Objectives</label>
+                <textarea
+                  rows={2}
+                  value={conductAgenda}
+                  onChange={(e) => setConductAgenda(e.target.value)}
+                  placeholder="Key topics to discuss, goals, deliverables..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Participants Email IDs */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Participant Email IDs (To receive invite email & app sync)</span>
+                  <span className="text-[10px] text-indigo-400">Comma-separated</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
+                  <input
+                    type="text"
+                    value={conductParticipants}
+                    onChange={(e) => setConductParticipants(e.target.value)}
+                    placeholder="sarah@gmail.com, alex@company.com, rahul@gmail.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Participants will receive a direct invitation email with the join button and the meeting will automatically appear on their respective dashboard.
+                </span>
+              </div>
+
+              {/* Pre-generated Meeting Share Link */}
+              <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-1.5">
+                <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider block">
+                  Live Meeting Link to Share
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/meetings/live/${conductPreviewId}/room`}
+                    className="flex-1 bg-slate-950 px-3 py-2 rounded-xl text-xs text-white font-mono border border-slate-800 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/meetings/live/${conductPreviewId}/room`);
+                      setCopiedConductLink(true);
+                      setTimeout(() => setCopiedConductLink(false), 2000);
+                    }}
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                  >
+                    {copiedConductLink ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-300" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setConductModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={conductingLive}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {conductingLive ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dispatching Invites & Starting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Video className="w-4 h-4" />
+                      <span>Conduct & Send Invites →</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Complaint Box Modal for Employee Portal */}
+      <ComplaintModal
+        isOpen={complaintModalOpen}
+        onClose={() => setComplaintModalOpen(false)}
+        userRole="employee"
+      />
+
+      {/* Operator Step-by-Step Guide Modal for Employee Portal */}
+      <AppGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+        initialRole="employee"
+      />
 
     </div>
   );

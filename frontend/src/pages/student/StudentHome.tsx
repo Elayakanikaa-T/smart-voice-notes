@@ -10,11 +10,14 @@ import {
   ExternalLink,
   Send,
   Loader2,
-  Plus
+  Plus,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { getSubjectEmoji } from '../../lib/subjectEmojis';
+import ComplaintModal from '../../components/ComplaintModal';
+import AppGuideModal from '../../components/AppGuideModal';
 
 interface Subject {
   id: string;
@@ -47,6 +50,10 @@ export default function StudentHome() {
 
   // Interactive Recommendations filter
   const [selectedRecSubject, setSelectedRecSubject] = useState<string>('all');
+
+  // Support & Guide modals
+  const [complaintModalOpen, setComplaintModalOpen] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
 
   // Comprehensive, verified study recommendations across all core subjects
   const defaultRecommendations: RecommendationItem[] = [
@@ -214,19 +221,33 @@ export default function StudentHome() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2.5">
             <Link
               to="/student/record"
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
             >
               <Mic className="w-4 h-4" /> Record Voice Note
             </Link>
             <Link
               to="/student/quiz"
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-sm transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs sm:text-sm transition-all"
             >
               <FlaskConical className="w-4 h-4 text-amber-400" /> Take a Quiz
             </Link>
+            <button
+              onClick={() => setGuideModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-500/30 font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              title="Step-by-Step Operator Guide"
+            >
+              <BookOpen className="w-4 h-4 text-indigo-400" /> Guide
+            </button>
+            <button
+              onClick={() => setComplaintModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 border border-rose-500/30 font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              title="Report an Issue to Admin"
+            >
+              <ShieldAlert className="w-4 h-4 text-rose-400" /> Helpdesk
+            </button>
           </div>
         </div>
       </div>
@@ -460,6 +481,20 @@ export default function StudentHome() {
           ))}
         </div>
       </div>
+
+      {/* Complaint Box Modal for Student Portal */}
+      <ComplaintModal
+        isOpen={complaintModalOpen}
+        onClose={() => setComplaintModalOpen(false)}
+        userRole="student"
+      />
+
+      {/* Operator Step-by-Step Guide Modal for Student Portal */}
+      <AppGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+        initialRole="student"
+      />
 
     </div>
   );

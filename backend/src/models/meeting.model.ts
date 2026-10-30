@@ -13,6 +13,9 @@ export interface IMeeting extends Document<string> {
   organizer: string; // userId
   participants: IMeetingParticipant[];
   scheduledAt?: Date;
+  dueTime?: string; // e.g. "11:30 AM" or "45 mins"
+  agenda?: string;
+  meetingLink?: string;
   status: 'scheduled' | 'recording' | 'processing' | 'done' | 'failed';
   audioUrl?: string;
   durationSeconds?: number;
@@ -36,6 +39,9 @@ const MeetingSchema = new Schema<IMeeting>(
     organizer: { type: String, required: true, index: true },
     participants: { type: [ParticipantSchema], default: [] },
     scheduledAt: { type: Date },
+    dueTime: { type: String },
+    agenda: { type: String },
+    meetingLink: { type: String },
     status: {
       type: String,
       enum: ['scheduled', 'recording', 'processing', 'done', 'failed'],
