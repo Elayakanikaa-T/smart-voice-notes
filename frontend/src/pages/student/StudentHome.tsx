@@ -493,7 +493,7 @@ export default function StudentHome() {
       <AppGuideModal
         isOpen={guideModalOpen}
         onClose={() => setGuideModalOpen(false)}
-        initialRole="student"
+        role="student"
       />
 
     </div>

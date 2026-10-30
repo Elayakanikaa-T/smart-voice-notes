@@ -26,7 +26,7 @@ const employeeLinks = [
   { to: '/meetings', icon: Briefcase, label: 'All Meetings', labelKey: 'meetings', end: true },
   { to: '/meetings/new', icon: PlusCircle, label: 'Record / New', labelKey: 'new_meeting' },
   { to: '/meeting-search', icon: Search, label: 'Search Archive', labelKey: 'search_meetings' },
-  { to: '/student/profile', icon: User, label: 'Profile', labelKey: 'profile' },
+  { to: '/meetings/profile', icon: User, label: 'Profile', labelKey: 'profile' },
 ];
 
 const adminLinks = [

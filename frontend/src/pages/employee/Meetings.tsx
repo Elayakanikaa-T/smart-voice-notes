@@ -1072,7 +1072,7 @@ export default function Meetings() {
       <AppGuideModal
         isOpen={guideModalOpen}
         onClose={() => setGuideModalOpen(false)}
-        initialRole="employee"
+        role="employee"
       />
 
     </div>
