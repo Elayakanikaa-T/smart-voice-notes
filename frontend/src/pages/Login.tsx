@@ -141,10 +141,8 @@ export default function Login() {
     try {
       const res = await sendOtp(cleanEmail, name.trim(), 'signup');
       setView('otp');
-      setSuccess(res.message || `A 6-digit verification code was sent to ${cleanEmail}. Please check your inbox and spam folder.`);
-      if ((res as any).devOtp) {
-        setOtp((res as any).devOtp);
-      }
+      setSuccess(res.message || `Verification code sent to ${cleanEmail}. Please check your Gmail inbox and spam folder.`);
+      setOtp(''); // User must check email and enter manually!
       setResendTimer(60);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to send verification code.');
@@ -203,9 +201,7 @@ export default function Login() {
       const res = await sendOtp(cleanEmail, undefined, 'reset');
       setView('forgot_password_otp');
       setSuccess(res.message || `A password reset code was sent to ${cleanEmail}. Please check your inbox and spam folder.`);
-      if ((res as any).devOtp) {
-        setOtp((res as any).devOtp);
-      }
+      setOtp(''); // User must check email and enter manually!
       setResendTimer(60);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to send password reset code.');

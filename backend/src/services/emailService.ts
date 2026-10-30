@@ -16,6 +16,84 @@ try {
 let cachedTransporter: nodemailer.Transporter | null = null;
 let lastTransporterKey = '';
 
+/**
+ * Dispatch email via Resend HTTPS API (Port 443).
+ * Render Free Tier blocks ports 25, 465, 587, but HTTPS (Port 443) is never blocked!
+ */
+async function sendViaResend(opts: { to: string; subject: string; html: string; fromName?: string }): Promise<boolean> {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) return false;
+
+  try {
+    const fromAddress = (process.env.EMAIL_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev').trim();
+    const fromHeader = `"${opts.fromName || 'Smart Voice Notes'}" <${fromAddress}>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromHeader,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      logger.warn(`[EmailService] Resend API returned error (${res.status}): ${errText}`);
+      return false;
+    }
+
+    logger.info(`[EmailService] ✉️ Email delivered successfully via Resend HTTPS API to ${opts.to}`);
+    return true;
+  } catch (err: any) {
+    logger.warn(`[EmailService] Resend HTTP dispatch failed: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Dispatch email via Brevo (Sendinblue) HTTPS API (Port 443).
+ */
+async function sendViaBrevo(opts: { to: string; toName?: string; subject: string; html: string }): Promise<boolean> {
+  const apiKey = (process.env.BREVO_API_KEY || '').trim();
+  if (!apiKey) return false;
+
+  try {
+    const senderEmail = (process.env.EMAIL_FROM || 'no-reply@smartvoicenotes.com').trim();
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'Smart Voice Notes', email: senderEmail },
+        to: [{ email: opts.to, name: opts.toName || 'User' }],
+        subject: opts.subject,
+        htmlContent: opts.html,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      logger.warn(`[EmailService] Brevo API returned error (${res.status}): ${errText}`);
+      return false;
+    }
+
+    logger.info(`[EmailService] ✉️ Email delivered successfully via Brevo HTTPS API to ${opts.to}`);
+    return true;
+  } catch (err: any) {
+    logger.warn(`[EmailService] Brevo HTTP dispatch failed: ${err.message}`);
+    return false;
+  }
+}
+
 export function getEmailTransporter(): nodemailer.Transporter | null {
   const user = (process.env.EMAIL_USER || '').trim();
   const rawPass = (process.env.EMAIL_PASS || '').trim();
@@ -150,13 +228,6 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
   const recipient = opts.toName || 'User';
   logger.info(`[EmailService] Preparing OTP delivery to ${opts.to}`);
 
-  const transporter = getEmailTransporter();
-  if (!transporter) {
-    throw new Error(
-      'Email service is not configured on the server. Please set EMAIL_USER and EMAIL_PASS environment variables.'
-    );
-  }
-
   const html = `
 <!DOCTYPE html>
 <html>
@@ -190,13 +261,35 @@ export async function sendOTPEmail(opts: OTPEmailOptions): Promise<void> {
 </body>
 </html>`;
 
+  const subject = `Your Smart Voice Notes Verification Code: ${opts.otp}`;
+
+  // 1. Try Resend HTTP API (Port 443 - works everywhere including Render Free Tier!)
+  if (process.env.RESEND_API_KEY) {
+    const sent = await sendViaResend({ to: opts.to, subject, html });
+    if (sent) return;
+  }
+
+  // 2. Try Brevo HTTP API (Port 443)
+  if (process.env.BREVO_API_KEY) {
+    const sent = await sendViaBrevo({ to: opts.to, toName: recipient, subject, html });
+    if (sent) return;
+  }
+
+  // 3. Fallback to standard Nodemailer SMTP
+  const transporter = getEmailTransporter();
+  if (!transporter) {
+    throw new Error(
+      'Email service not configured. Please set RESEND_API_KEY (recommended for cloud hosts) or EMAIL_USER & EMAIL_PASS in server environment variables.'
+    );
+  }
+
   const sender = (process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@smartvoicenotes.com').trim();
 
   try {
     await transporter.sendMail({
       from: `"Smart Voice Notes" <${sender}>`,
       to: opts.to,
-      subject: `Your Smart Voice Notes Verification Code: ${opts.otp}`,
+      subject,
       html,
     });
     logger.info(`[EmailService] OTP email sent successfully to ${opts.to}`);

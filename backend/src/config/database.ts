@@ -19,6 +19,15 @@ export async function connectMongo(uriOverride?: string): Promise<typeof mongoos
       { $set: { email_verified: true } }
     ).catch(() => {});
 
+    // Purge legacy mock/test seed accounts
+    conn.connection.collection('users').deleteMany({
+      $or: [
+        { email: { $in: ['student@smartnotes.ai', 'alex.river@testmail.com', 'student@voice.edu'] } },
+        { email: { $regex: /_1787\d+@(smartnotes\.ai|company\.com)/i } },
+        { name: { $in: ['Alex Student', 'Jordan Lee', 'Jordan Employee', 'Alex River', 'Randomuser 987'] } },
+      ]
+    }).catch(() => {});
+
     return conn;
   } catch (error: any) {
     logger.error(`[MongoDB] Connection failed (${error.message}). Database connection is required.`);

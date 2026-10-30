@@ -3,7 +3,15 @@ import { UserModel, AudioNoteModel, SubjectModel, QuizModel, QuizResultModel, Me
 
 export class AdminService {
   async getUsersList() {
-    const users = await UserModel.find().select('-password_hash').sort({ created_at: -1 }).lean();
+    const mockFilter = {
+      $and: [
+        { email: { $nin: ['student@smartnotes.ai', 'alex.river@testmail.com', 'student@voice.edu'] } },
+        { email: { $not: /_1787\d+@(smartnotes\.ai|company\.com)/i } },
+        { name: { $nin: ['Alex Student', 'Jordan Lee', 'Jordan Employee', 'Alex River', 'Randomuser 987'] } },
+      ]
+    };
+
+    const users = await UserModel.find(mockFilter).select('-password_hash').sort({ created_at: -1 }).lean();
     const results = await Promise.all(
       users.map(async (u: any) => {
         const noteCount = await AudioNoteModel.countDocuments({ user_id: u._id, is_archived: false });
@@ -33,10 +41,18 @@ export class AdminService {
   }
 
   async getSystemStats() {
+    const mockFilter = {
+      $and: [
+        { email: { $nin: ['student@smartnotes.ai', 'alex.river@testmail.com', 'student@voice.edu'] } },
+        { email: { $not: /_1787\d+@(smartnotes\.ai|company\.com)/i } },
+        { name: { $nin: ['Alex Student', 'Jordan Lee', 'Jordan Employee', 'Alex River', 'Randomuser 987'] } },
+      ]
+    };
+
     const [totalStudents, totalAdmins, totalEmployees, totalNotes, totalQuizzes, totalSubjects, totalMeetings] = await Promise.all([
-      UserModel.countDocuments({ role: 'student' }),
-      UserModel.countDocuments({ role: 'admin' }),
-      UserModel.countDocuments({ role: 'employee' }),
+      UserModel.countDocuments({ role: 'student', ...mockFilter }),
+      UserModel.countDocuments({ role: 'admin', ...mockFilter }),
+      UserModel.countDocuments({ role: 'employee', ...mockFilter }),
       AudioNoteModel.countDocuments(),
       QuizModel.countDocuments(),
       SubjectModel.countDocuments(),

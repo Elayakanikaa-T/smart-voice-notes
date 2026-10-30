@@ -48,26 +48,18 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     otpStore.set(emailNormalized, { otp, expiresAt, verified: false });
-    logger.info(`[AuthService] ⚡ OTP generated for ${emailNormalized}: [ ${otp} ] (Valid 10 min)`);
+    logger.info(`[AuthService] OTP generated for ${emailNormalized} (Valid 10 min)`);
 
-    // Dispatch OTP email asynchronously in the background so the user never waits for SMTP network latency!
-    const transporter = getEmailTransporter();
-    if (transporter) {
-      sendOTPEmail({
-        to: emailNormalized,
-        toName: data.name,
-        otp,
-      }).catch((emailErr: any) => {
-        logger.warn(`[AuthService] Background SMTP delivery notice: ${emailErr.message}`);
-      });
-    } else {
-      logger.info(`[AuthService] SMTP not configured in .env. Verification code [ ${otp} ] ready.`);
-    }
+    // Dispatch OTP email to the user's inbox
+    await sendOTPEmail({
+      to: emailNormalized,
+      toName: data.name,
+      otp,
+    });
 
     return {
       success: true,
       message: `A 6-digit verification code has been dispatched to ${emailNormalized}. Please check your inbox and spam folder.`,
-      devOtp: otp,
     };
   }
 
@@ -183,12 +175,7 @@ export class AuthService {
 
     await this.storeRefreshToken(userId, refreshToken);
 
-    // Fast-path: seed starter curriculum data asynchronously in background so signup returns instantly!
-    setImmediate(() => {
-      seedUserData(userId).catch((err: any) => {
-        logger.warn(`[AuthService] Background seed notice: ${err?.message}`);
-      });
-    });
+    // No default subjects or notes seeded — user begins with a clean, private account
 
     return {
       user: {
