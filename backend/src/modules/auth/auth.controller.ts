@@ -3,6 +3,24 @@ import { authService } from './auth.service.js';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware.js';
 
 export class AuthController {
+  async sendOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.sendOtp(req.body);
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  }
+
+  async verifyOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.verifyOtp(req.body);
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  }
+
   async signup(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.signup(req.body);
@@ -16,6 +34,7 @@ export class AuthController {
     }
   }
 
+
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.login(req.body);
@@ -26,6 +45,15 @@ export class AuthController {
       });
     } catch (error: any) {
       res.status(401).json({ success: false, error: error.message });
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.resetPassword(req.body);
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
     }
   }
 

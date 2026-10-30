@@ -96,6 +96,8 @@ export default function MeetingDetail() {
   const baseSavedTranscriptRef = useRef<string>('');
   const currentSessionTranscriptRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
+  const isRecognizingRef = useRef<boolean>(false);
+  const isAbortingRef = useRef<boolean>(false);
   const liveVideoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   const fetchMeetingData = async () => {
@@ -121,9 +123,10 @@ export default function MeetingDetail() {
     fetchMeetingData();
     return () => {
       isRecordingRef.current = false;
+      isAbortingRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.abort(); } catch {}
       }
     };
   }, [id]);
@@ -136,14 +139,15 @@ export default function MeetingDetail() {
       try {
         const res = await api.get(`/meetings/${id}/status`);
         const st = res.data?.data;
-        if (st?.meetingStatus === 'done' || st?.meetingStatus === 'failed') {
+        const currentStatus = st?.meetingStatus || st?.status || st?.meeting?.status;
+        if (currentStatus === 'done' || currentStatus === 'failed') {
           fetchMeetingData();
           clearInterval(interval);
         }
       } catch (e) {
         console.error('Status poll error:', e);
       }
-    }, 1000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [id, meeting?.status]);
@@ -157,13 +161,20 @@ export default function MeetingDetail() {
     }
 
     try {
-      if (recognitionRef.current) {
+      if (isRecognizingRef.current && recognitionRef.current) {
+        isAbortingRef.current = true;
         try { recognitionRef.current.abort(); } catch {}
       }
+      
       const rec = new SpeechRecognition();
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = lang;
+
+      rec.onstart = () => {
+        isRecognizingRef.current = true;
+        isAbortingRef.current = false;
+      };
 
       rec.onresult = (event: any) => {
         let fullSessionText = '';
@@ -182,10 +193,12 @@ export default function MeetingDetail() {
       };
 
       rec.onerror = (e: any) => {
-        console.warn('[LiveSTT] status:', e.error);
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+        console.warn('[LiveSTT] error status:', e.error);
       };
 
       rec.onend = () => {
+        isRecognizingRef.current = false;
         if (currentSessionTranscriptRef.current) {
           baseSavedTranscriptRef.current = (
             (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 
@@ -193,19 +206,23 @@ export default function MeetingDetail() {
           ).trim();
           currentSessionTranscriptRef.current = '';
         }
-        if (isRecordingRef.current) {
+        if (isRecordingRef.current && !isAbortingRef.current) {
           setTimeout(() => {
-            if (isRecordingRef.current) initLiveRecognition(lang);
-          }, 150);
+            if (isRecordingRef.current && !isAbortingRef.current && !isRecognizingRef.current) {
+              try { rec.start(); } catch {}
+            }
+          }, 200);
         }
       };
 
+      isAbortingRef.current = false;
       rec.start();
       recognitionRef.current = rec;
     } catch (e) {
       console.warn('[LiveSTT] failed:', e);
     }
   };
+
 
   const handleSaveFullTranscript = async () => {
     if (!id || !fullTranscriptDraft.trim()) return;
@@ -286,13 +303,15 @@ export default function MeetingDetail() {
 
   const stopRecording = () => {
     isRecordingRef.current = false;
+    isAbortingRef.current = true;
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       if (timerRef.current) clearInterval(timerRef.current);
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.abort(); } catch {}
       }
+
       if (currentSessionTranscriptRef.current) {
         baseSavedTranscriptRef.current = (
           (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') + 

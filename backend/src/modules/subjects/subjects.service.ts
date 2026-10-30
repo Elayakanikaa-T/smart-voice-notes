@@ -1,29 +1,15 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { SubjectModel, AudioNoteModel, ProgressModel, UserModel, QuizModel, TranscriptModel, SummaryModel } from '../../models/index.js';
 import { seedUserData } from '../../services/seed/seedData.js';
 
 export class SubjectsService {
   async getSubjects(userId: string) {
-    let subjects: any[] = await SubjectModel.find({
-      $or: [{ user_id: userId }, { user_id: { $exists: false } }],
+    const subjects: any[] = await SubjectModel.find({
+      user_id: userId,
       is_archived: false,
     })
       .sort({ created_at: -1 })
       .lean();
-
-    if (subjects.length === 0) {
-      const userDoc: any = await UserModel.findById(userId).lean();
-      if (!userDoc?.has_seeded) {
-        await seedUserData(userId).catch(() => {});
-        await UserModel.findByIdAndUpdate(userId, { has_seeded: true }).catch(() => {});
-        subjects = await SubjectModel.find({
-          $or: [{ user_id: userId }, { user_id: { $exists: false } }],
-          is_archived: false,
-        })
-          .sort({ created_at: -1 })
-          .lean();
-      }
-    }
 
     const results = await Promise.all(
       subjects.map(async (s) => {
@@ -44,9 +30,9 @@ export class SubjectsService {
           color: s.color || '#6366F1',
           icon: s.icon || 'BookOpen',
           description: s.description || '',
-          note_count: Math.max(noteCount, s.note_count || 0),
+          note_count: noteCount,
           folder_count: 0,
-          readiness_score: progressDoc?.readiness_score || 82,
+          readiness_score: progressDoc?.readiness_score || s.readiness_score || 0,
           created_at: s.created_at,
         };
       })
@@ -64,7 +50,8 @@ export class SubjectsService {
       color: doc.color,
       icon: doc.icon,
       description: doc.description,
-      note_count: doc.note_count,
+      note_count: doc.note_count || 0,
+      readiness_score: doc.readiness_score || 0,
       created_at: doc.created_at,
     };
   }
@@ -83,9 +70,8 @@ export class SubjectsService {
       icon,
       description,
       note_count: 0,
+      readiness_score: 0,
     });
-    const { seedCustomSubjectData } = await import('../../services/seed/seedData.js');
-    await seedCustomSubjectData(userId, id, data.name).catch(() => {});
 
     return {
       id: doc._id,
@@ -94,7 +80,8 @@ export class SubjectsService {
       color: doc.color,
       icon: doc.icon,
       description: doc.description,
-      note_count: 2,
+      note_count: 0,
+      readiness_score: 0,
       created_at: doc.created_at,
     };
   }

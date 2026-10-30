@@ -2,19 +2,19 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export function ProtectedRoute({ role, allowedRoles }: { role?: 'student' | 'admin' | 'employee'; allowedRoles?: Array<'student' | 'admin' | 'employee'> }) {
-  const { user, loading, token } = useAuth();
+  const { user, loading, token, logout } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-[#0B0F19]">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
       </div>
     );
   }
 
   // If no token in memory or localStorage, redirect to login
-  const hasToken = token || localStorage.getItem('accessToken');
-  if (!hasToken) {
+  const storedToken = token || localStorage.getItem('accessToken');
+  if (!storedToken) {
     return <Navigate to="/login" replace />;
   }
 
@@ -24,11 +24,18 @@ export function ProtectedRoute({ role, allowedRoles }: { role?: 'student' | 'adm
     try {
       const stored = localStorage.getItem('user');
       if (stored) currentUser = JSON.parse(stored);
-    } catch (e) {}
+    } catch {
+      currentUser = null;
+    }
   }
 
-  const userRole = currentUser?.role || (currentUser?.email?.includes('admin') ? 'admin' : 'employee');
+  // If no user record exists, clear state and redirect to login
+  if (!currentUser || !currentUser.email) {
+    logout();
+    return <Navigate to="/login" replace />;
+  }
 
+  const userRole = currentUser.role;
   const validRoles = allowedRoles || (role ? [role] : ['student', 'admin', 'employee']);
 
   // Admin has access to all portals
@@ -39,7 +46,9 @@ export function ProtectedRoute({ role, allowedRoles }: { role?: 'student' | 'adm
   // If role is required and userRole is not in the allowed list
   if (!validRoles.includes(userRole as any)) {
     if (userRole === 'employee') return <Navigate to="/meetings" replace />;
-    return <Navigate to="/student" replace />;
+    if (userRole === 'student') return <Navigate to="/student" replace />;
+    logout();
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

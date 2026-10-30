@@ -137,18 +137,21 @@ export class GeminiLLMProvider implements ILLMProvider {
 
   async generateQuiz(transcript: string, count = 5, difficulty = 'medium'): Promise<QuizQuestionItem[]> {
     logger.info(`[LLM:Gemini] Generating ${count} quiz questions (${difficulty})...`);
-    const prompt = `Generate ${count} multiple-choice quiz questions (${difficulty} difficulty) from this content:
+    const prompt = `Generate exactly ${count} multiple-choice quiz questions (${difficulty} difficulty) based strictly on this content/note:
     "${transcript}"
 
-    Output strictly as JSON:
+    Every question must be accurate and directly based on the provided notes.
+    Output strictly as JSON matching:
     {
       "questions": [
         {
           "questionId": "1",
-          "question": "Question text",
+          "question": "Question text based on note",
           "options": ["Option A", "Option B", "Option C", "Option D"],
           "correctIndex": 0,
-          "explanation": "Why this answer is correct",
+          "correctAnswer": "Option text matching options[correctIndex]",
+          "hint": "A helpful learning hint that guides the student towards the answer without revealing it",
+          "explanation": "Why this answer is correct based on the note",
           "difficulty": "${difficulty}",
           "topicTag": "Topic Name",
           "bloomTaxonomyLevel": "Understand"
@@ -212,17 +215,22 @@ export class GeminiLLMProvider implements ILLMProvider {
   }
 
   async answerDoubt(messages: any[], context?: string): Promise<string> {
-    logger.info(`[LLM:Gemini] Answering doubt...`);
+    logger.info(`[LLM:Gemini] Answering user query (Claude/ChatGPT style)...`);
     const formattedMessages = (messages || []).map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-    const prompt = `You are a helpful AI study assistant. Answer the student's doubt.
-    Important constraint: Do NOT use any special characters, markdown hashes, asterisks, LaTeX equations, emojis, or table symbols. Output only clean, plain text with simple numbers or hyphens and clear line breaks.
-    Context from their study material (if any):
-    "${context || 'None'}"
+    const prompt = `You are an advanced, versatile AI assistant like ChatGPT and Claude.
+Answer whatever the user asks clearly, accurately, and thoroughly.
+- If the user asks for code, write clean, well-commented code with clear explanations.
+- If the user asks about their notes or provided context, synthesize and reference them accurately.
+- If the user asks about math, science, programming, history, or general knowledge, provide articulate, insightful explanations.
+- Use markdown formatting with clear headers, bullet points, and code blocks as appropriate.
 
-    Conversation history:
-    ${formattedMessages}
-    
-    ASSISTANT:`;
+Context from study notes (if provided):
+"${context || 'None'}"
+
+Conversation history:
+${formattedMessages}
+
+ASSISTANT:`;
 
     try {
       return await this.callGemini(prompt, false);

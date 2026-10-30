@@ -28,8 +28,51 @@ export default function RecordAudio() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const baseSavedTranscriptRef = useRef<string>('');
-  const currentSessionTranscriptRef = useRef<string>('');
+  const currentSessionFinalRef = useRef<string>('');
+  const currentSessionInterimRef = useRef<string>('');
   const isRecordingRef = useRef<boolean>(false);
+
+  const deduplicateTranscript = (text: string): string => {
+    if (!text) return '';
+    let str = text.trim();
+
+    // 1. Clean consecutive punctuation like ".."
+    str = str.replace(/\.{2,}/g, '.');
+
+    // 2. Remove duplicate adjacent words with or without punctuation (e.g. "hello.hello.", "hello. hello.", "hello hello", "hello, hello")
+    let prev = '';
+    while (prev !== str) {
+      prev = str;
+      str = str.replace(/\b([a-zA-Z0-9]+)\s*[,.:;?!]?\s*\1(?=[\s,.:;?!]|$)/gi, '$1');
+      str = str.replace(/([a-zA-Z0-9]+)\.\1\./gi, '$1.');
+      str = str.replace(/\b([a-zA-Z0-9]+)\s+\1\b/gi, '$1');
+    }
+
+    // 3. Remove duplicate adjacent phrases/sentences: e.g. "hello there. hello there." -> "hello there."
+    const sentences = str.split(/(?<=[.?!])\s+/);
+    if (sentences.length > 1) {
+      const uniqueSentences: string[] = [];
+      for (const s of sentences) {
+        const cleanS = s.trim();
+        if (!cleanS) continue;
+        if (uniqueSentences.length === 0 || uniqueSentences[uniqueSentences.length - 1].toLowerCase() !== cleanS.toLowerCase()) {
+          uniqueSentences.push(cleanS);
+        }
+      }
+      str = uniqueSentences.join(' ');
+    }
+
+    // 4. Exact full doubling: e.g. "hello. hello."
+    const half = Math.floor(str.length / 2);
+    const left = str.slice(0, half).trim();
+    const right = str.slice(half).trim();
+    if (left && left.toLowerCase() === right.toLowerCase()) {
+      return left;
+    }
+
+    // Clean multiple spaces and trailing dots
+    return str.replace(/\s+/g, ' ').trim();
+  };
 
   useEffect(() => {
     api.get('/subjects').then(({ data }) => {
@@ -71,19 +114,29 @@ export default function RecordAudio() {
 
       recognition.onresult = (event: any) => {
         setSttStatus('listening');
-        let fullSessionText = '';
+        let sessionFinal = '';
+        let sessionInterim = '';
+
         for (let i = 0; i < event.results.length; ++i) {
-          const piece = event.results[i][0].transcript;
-          if (piece) {
-            fullSessionText += (fullSessionText ? ' ' : '') + piece.trim();
+          const piece = event.results[i][0]?.transcript || '';
+          if (event.results[i].isFinal) {
+            sessionFinal = (sessionFinal ? sessionFinal + ' ' : '') + piece.trim();
+          } else {
+            sessionInterim = (sessionInterim ? sessionInterim + ' ' : '') + piece.trim();
           }
         }
-        currentSessionTranscriptRef.current = fullSessionText;
-        const prefix = baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '';
-        const combined = (prefix + fullSessionText).trim();
-        if (combined) {
-          setLiveTranscript(combined);
-        }
+
+        currentSessionFinalRef.current = sessionFinal;
+        currentSessionInterimRef.current = sessionInterim;
+
+        const combined = [
+          baseSavedTranscriptRef.current,
+          sessionFinal,
+          sessionInterim
+        ].filter(Boolean).join(' ');
+
+        const clean = deduplicateTranscript(combined);
+        setLiveTranscript(clean);
       };
 
       recognition.onerror = (event: any) => {
@@ -95,7 +148,7 @@ export default function RecordAudio() {
           setSttStatus('error');
           setSttError('Network error — speech-to-text requires internet connection.');
         } else if (event.error === 'no-speech') {
-          // No speech detected — this is normal, just keep listening
+          // Normal silence, keep listening
         } else {
           setSttStatus('error');
           setSttError(`Speech recognition error: ${event.error}`);
@@ -103,14 +156,15 @@ export default function RecordAudio() {
       };
 
       recognition.onend = () => {
-        if (currentSessionTranscriptRef.current) {
-          baseSavedTranscriptRef.current = (
-            (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') +
-            currentSessionTranscriptRef.current
-          ).trim();
-          currentSessionTranscriptRef.current = '';
-        }
         if (isRecordingRef.current) {
+          if (currentSessionFinalRef.current) {
+            baseSavedTranscriptRef.current = deduplicateTranscript(
+              (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') +
+              currentSessionFinalRef.current
+            );
+            currentSessionFinalRef.current = '';
+            currentSessionInterimRef.current = '';
+          }
           setTimeout(() => {
             if (isRecordingRef.current) {
               initRecognition(lang);
@@ -146,7 +200,8 @@ export default function RecordAudio() {
       mediaRef.current = mr;
       isRecordingRef.current = true;
       baseSavedTranscriptRef.current = '';
-      currentSessionTranscriptRef.current = '';
+      currentSessionFinalRef.current = '';
+      currentSessionInterimRef.current = '';
       setRecordState('recording');
       setTimer(0);
       setLiveTranscript('');
@@ -167,18 +222,20 @@ export default function RecordAudio() {
     mediaRef.current?.stop();
     if (timerRef.current) clearInterval(timerRef.current);
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
+      try { recognitionRef.current.abort(); } catch {}
     }
-    if (currentSessionTranscriptRef.current) {
-      baseSavedTranscriptRef.current = (
-        (baseSavedTranscriptRef.current ? baseSavedTranscriptRef.current + ' ' : '') +
-        currentSessionTranscriptRef.current
-      ).trim();
-      currentSessionTranscriptRef.current = '';
-    }
-    if (baseSavedTranscriptRef.current) {
-      setLiveTranscript(baseSavedTranscriptRef.current);
-    }
+    
+    const combined = [
+      baseSavedTranscriptRef.current,
+      currentSessionFinalRef.current,
+      currentSessionInterimRef.current
+    ].filter(Boolean).join(' ');
+
+    const clean = deduplicateTranscript(combined);
+    baseSavedTranscriptRef.current = clean;
+    currentSessionFinalRef.current = '';
+    currentSessionInterimRef.current = '';
+    setLiveTranscript(clean);
     setRecordState('stopped');
   };
 
@@ -196,8 +253,9 @@ export default function RecordAudio() {
       });
 
       if (data.data?.transcript) {
-        setLiveTranscript(data.data.transcript);
-        baseSavedTranscriptRef.current = data.data.transcript;
+        const cleaned = deduplicateTranscript(data.data.transcript);
+        setLiveTranscript(cleaned);
+        baseSavedTranscriptRef.current = cleaned;
       }
     } catch (err: any) {
       console.warn('Backend AI transcription error:', err);
@@ -271,7 +329,8 @@ export default function RecordAudio() {
     setTitle('');
     setLiveTranscript('');
     baseSavedTranscriptRef.current = '';
-    currentSessionTranscriptRef.current = '';
+    currentSessionFinalRef.current = '';
+    currentSessionInterimRef.current = '';
     setResult(null);
   };
 
@@ -458,6 +517,8 @@ export default function RecordAudio() {
               onChange={(e) => {
                 setLiveTranscript(e.target.value);
                 baseSavedTranscriptRef.current = e.target.value;
+                currentSessionFinalRef.current = '';
+                currentSessionInterimRef.current = '';
               }}
               placeholder={recordState === 'recording' ? 'Speak now... your words will appear here in real-time.' : 'Speech-to-text transcript will appear here when you record. You can also type or edit text directly.'}
               className="w-full h-28 bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-sm text-slate-200 resize-none focus:outline-none focus:border-blue-500 placeholder-slate-600 leading-relaxed font-sans"

@@ -61,6 +61,16 @@ export class QuizzesController {
     }
   }
 
+  async generateFromNote(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const quiz = await quizzesService.generateQuizFromNote(userId, req.body);
+      res.status(201).json({ success: true, message: 'Quiz generated directly from note.', data: quiz });
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  }
+
   async deleteQuiz(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;

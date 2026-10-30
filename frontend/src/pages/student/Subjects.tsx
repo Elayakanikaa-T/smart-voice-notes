@@ -41,6 +41,8 @@ interface Note {
   summary?: string;
   bullet_points?: string[];
   key_points?: string[];
+  readiness_level?: number;
+  is_completed?: boolean;
   created_at?: string;
 }
 
@@ -65,6 +67,8 @@ export default function Subjects() {
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [activeTopic, setActiveTopic] = useState<Note | null>(null);
   const [activeTab, setActiveTab] = useState<'notes' | 'takeaways' | 'summary' | 'flashcards'>('notes');
+  const [savingReadiness, setSavingReadiness] = useState(false);
+  const [readinessFeedback, setReadinessFeedback] = useState<string | null>(null);
 
   // Flashcards state for active topic
   const [flashcards, setFlashcards] = useState<any[]>([]);
@@ -150,6 +154,44 @@ export default function Subjects() {
       }
     } catch {
       // Keep existing topic
+    }
+  };
+
+  const handleSetConceptReadiness = async (noteId: string, topicTitle: string, readiness: number, markDone = false) => {
+    setSavingReadiness(true);
+    setReadinessFeedback(null);
+    try {
+      const subId = activeSubject?.id || activeSubject?._id;
+      await api.post('/progress/concept-readiness', {
+        subjectId: subId,
+        noteId,
+        topicName: topicTitle,
+        readinessLevel: readiness,
+        isDone: markDone,
+      });
+
+      // Update in topic list
+      setSubjectTopics(prev => prev.map(t => ((t.id || t._id) === noteId) ? { ...t, readiness_level: readiness, is_completed: markDone } : t));
+      
+      // Update in active topic view
+      if (activeTopic && ((activeTopic.id || activeTopic._id) === noteId)) {
+        setActiveTopic(prev => prev ? { ...prev, readiness_level: readiness, is_completed: markDone } : null);
+      }
+
+      setReadinessFeedback(markDone 
+        ? `✅ Concept marked as Done! Readiness set to ${readiness}%.` 
+        : `⚡ Readiness updated to ${readiness}%.`);
+      setTimeout(() => setReadinessFeedback(null), 3500);
+      
+      // Refresh subjects list in background to reflect updated mastery
+      api.get('/subjects').then(({ data }) => {
+        const subs = data.data?.subjects || data.data || [];
+        setSubjects(subs);
+      }).catch(() => {});
+    } catch (err) {
+      console.warn('Failed to update concept readiness:', err);
+    } finally {
+      setSavingReadiness(false);
     }
   };
 
@@ -393,6 +435,8 @@ export default function Subjects() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {subjectTopics.map((topic, index) => {
                 const topicId = topic.id || topic._id || '';
+                const readiness = topic.readiness_level ?? (topic.is_completed ? 100 : 0);
+                const isDone = topic.is_completed || readiness >= 90;
 
                 return (
                   <div
@@ -401,9 +445,20 @@ export default function Subjects() {
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
-                          Topic {index + 1}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                            Topic {index + 1}
+                          </span>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                            isDone 
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                              : readiness > 0 
+                              ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' 
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {readiness}% Readiness {isDone ? '• Done ✓' : ''}
+                          </span>
+                        </div>
                         <button
                           onClick={(e) => handleDeleteTopic(topicId, topic.title, e)}
                           title="Delete Topic Note"
@@ -421,22 +476,56 @@ export default function Subjects() {
                       </p>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-800/80 flex items-center gap-2">
-                      <button
-                        onClick={() => openTopicDetail(topic)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all"
-                      >
-                        <FileText size={13} />
-                        <span>Study In-Depth Notes</span>
-                      </button>
-                      
-                      <a
-                        href="/student/quiz"
-                        className="py-2 px-3 rounded-xl bg-purple-600/20 border border-purple-500/30 hover:bg-purple-600 hover:text-white text-purple-300 text-xs font-bold flex items-center justify-center gap-1 transition-all"
-                      >
-                        <FlaskConical size={13} />
-                        <span>Take Quiz</span>
-                      </a>
+                    {/* Readiness Level Setter & Done Button */}
+                    <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
+                        <span>Set Concept Readiness:</span>
+                        <div className="flex items-center gap-1">
+                          {[25, 50, 75, 100].map(pct => (
+                            <button
+                              key={pct}
+                              onClick={() => handleSetConceptReadiness(topicId, topic.title, pct, pct === 100)}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                readiness === pct
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                              }`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openTopicDetail(topic)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all"
+                        >
+                          <FileText size={13} />
+                          <span>Study Notes</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleSetConceptReadiness(topicId, topic.title, 100, true)}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                            isDone
+                              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
+                        >
+                          <Check size={13} />
+                          <span>{isDone ? 'Done ✓' : 'Mark Done'}</span>
+                        </button>
+                        
+                        <a
+                          href="/student/quiz"
+                          className="py-2 px-2.5 rounded-xl bg-purple-600/20 border border-purple-500/30 hover:bg-purple-600 hover:text-white text-purple-300 text-xs font-bold flex items-center justify-center gap-1 transition-all"
+                        >
+                          <FlaskConical size={13} />
+                          <span>Quiz</span>
+                        </a>
+                      </div>
                     </div>
                   </div>
                 );
@@ -464,20 +553,98 @@ export default function Subjects() {
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
                   {activeSubject.name}
                 </span>
+                {activeTopic.is_completed && (
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                    <Check size={12} /> Mastered • Done
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl font-extrabold text-white mt-1">
                 {activeTopic.title}
               </h1>
             </div>
 
-            <a
-              href="/student/quiz"
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition-all"
-            >
-              <FlaskConical size={16} />
-              <span>Take 8-Level Topic Quiz (16 MCQs)</span>
-            </a>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => handleSetConceptReadiness(activeTopic.id || (activeTopic as any)._id, activeTopic.title, 100, true)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                  activeTopic.is_completed
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                }`}
+              >
+                <Check size={15} />
+                <span>{activeTopic.is_completed ? 'Marked as Done ✓' : 'Mark Concept as Done'}</span>
+              </button>
+
+              <a
+                href="/student/quiz"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition-all"
+              >
+                <FlaskConical size={15} />
+                <span>Topic Quiz</span>
+              </a>
+            </div>
           </div>
+
+          {/* Interactive Readiness Control Widget */}
+          <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-slate-900 to-indigo-950/40 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <Award size={15} />
+                Student Concept Readiness Level
+              </span>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Rate your understanding of this topic to track your exam readiness in real time.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-sm font-extrabold text-white min-w-[45px]">
+                {activeTopic.readiness_level ?? (activeTopic.is_completed ? 100 : 0)}%
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={activeTopic.readiness_level ?? (activeTopic.is_completed ? 100 : 0)}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  handleSetConceptReadiness(activeTopic.id || (activeTopic as any)._id, activeTopic.title, val, val >= 85);
+                }}
+                className="w-36 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              {savingReadiness && <Loader2 size={12} className="animate-spin text-indigo-400" />}
+              <div className="flex gap-1">
+                {[
+                  { label: '25%', val: 25 },
+                  { label: '50%', val: 50 },
+                  { label: '75%', val: 75 },
+                  { label: '100% ✓', val: 100 }
+                ].map(b => (
+                  <button
+                    key={b.val}
+                    disabled={savingReadiness}
+                    onClick={() => handleSetConceptReadiness(activeTopic.id || (activeTopic as any)._id, activeTopic.title, b.val, b.val === 100)}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${
+                      (activeTopic.readiness_level ?? (activeTopic.is_completed ? 100 : 0)) === b.val
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {readinessFeedback && (
+            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold animate-in fade-in flex items-center gap-2">
+              <span>{readinessFeedback}</span>
+            </div>
+          )}
 
           {/* Navigation Tabs */}
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">

@@ -1,20 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
-import { Brain, Send, Loader2, User, Sparkles, RefreshCw, CheckCircle, Clock } from 'lucide-react';
+import { Brain, Send, Loader2, User, Sparkles, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 
 interface Message { role: 'user' | 'assistant'; content: string; }
 
 const STARTERS = [
-  'Explain Binary Search Trees to me simply',
-  'What are the key differences between process and thread?',
-  'Give me a quiz on Data Structures',
-  'Summarize my latest notes',
-  'What should I study next for my exam?',
+  'Explain any complex topic simply with an analogy',
+  'Solve a coding, math, or algorithm problem step-by-step',
+  'Generate practice quiz questions for my notes',
+  'Compare two concepts and highlight their trade-offs',
+  'Draft a revision plan or essay outline for my studies',
 ];
 
 export default function AIGuide() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "Hi! I am your AI Study Guide. I can help you understand concepts, generate quizzes, summarize your notes, and create a personalized study plan. What would you like to explore today?" }
+    { role: 'assistant', content: "Hi! I am your AI Study Guide. Like ChatGPT and Claude, you can ask me anything — from coding bugs, math proofs, and study concepts to general questions and lecture summaries. What would you like to explore today?" }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,16 +56,28 @@ export default function AIGuide() {
     } catch (err) {
       console.error('Doubt chat error:', err);
       // Fallback
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `Study Guide Insights for ${text}:
-
-1. Core Concept: In computer science and data analytics, understanding foundational structures and algorithms is essential for exam preparation.
-2. Key Application: Apply modular problem solving, verify time and space constraints, and review your latest subject lecture notes.
-3. Recommendation: Check out your Subject Notes and Practice Quizzes for targeted level assessments.`
-      }]);
+      if (/^(good\s+(morning|afternoon|evening)|hello|hi|hey|greetings)/i.test(text.trim())) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Good morning! ☀️ How can I assist you with your studies or any questions today?`
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Here is information on "${text}": Let's explore this step-by-step. Feel free to ask more details or paste specific problems!`
+        }]);
+      }
     }
     setLoading(false);
+  };
+
+  const handleClearChat = async () => {
+    setMessages([{ role: 'assistant', content: "Hi! I am your AI Assistant. Chat cleared. What would you like to explore or ask today?" }]);
+    try {
+      await api.delete('/doubt-chat');
+    } catch (err) {
+      console.warn('Failed to clear doubt chat session:', err);
+    }
   };
 
   return (
@@ -76,13 +88,13 @@ export default function AIGuide() {
           <Brain size={22} className="text-white" />
         </div>
         <div>
-          <h1 className="font-bold text-white">AI Study Guide</h1>
-          <p className="text-xs text-slate-400">Powered by OpenAI / Gemini</p>
+          <h1 className="font-bold text-white">AI Assistant & Study Guide</h1>
+          <p className="text-xs text-slate-400">Claude & ChatGPT Powered • Answers whatever you ask</p>
         </div>
         <div className="ml-auto flex items-center gap-4">
-          <button onClick={() => setMessages([{ role: 'assistant', content: "Hi! I am your AI Study Guide. Chat refreshed. What would you like to explore today?" }])}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors" title="Refresh Chat">
-            <RefreshCw size={14} /> Refresh
+          <button onClick={handleClearChat}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors" title="Clear Chat History">
+            <RefreshCw size={14} /> Clear Chat
           </button>
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -106,19 +118,6 @@ export default function AIGuide() {
                 : 'bg-slate-800 text-slate-200 rounded-tl-sm border border-slate-700'
             }`}>
               {msg.content}
-              {msg.role === 'assistant' && msg.content.includes('Comprehensive') && (
-                <div className="mt-4 pt-3 border-t border-slate-700 flex flex-col gap-2">
-                  <p className="text-xs text-slate-400 font-semibold">Have you completed this topic?</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setMessages(prev => [...prev, { role: 'assistant', content: '✅ Topic marked as Done. Great job!' }])} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg text-xs font-semibold border border-emerald-500/30 transition-colors">
-                      <CheckCircle size={14} /> Mark Done
-                    </button>
-                    <button onClick={() => setMessages(prev => [...prev, { role: 'assistant', content: '⏳ Topic marked as In Progress. Keep going!' }])} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 rounded-lg text-xs font-semibold border border-amber-500/30 transition-colors">
-                      <Clock size={14} /> In Progress
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         ))}
@@ -154,7 +153,7 @@ export default function AIGuide() {
         <form onSubmit={e => { e.preventDefault(); send(input); }} className="flex items-center gap-3">
           <input value={input} onChange={e => setInput(e.target.value)}
             className="flex-1 rounded-xl bg-slate-800 border border-slate-700 px-4 py-3 text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none transition-all"
-            placeholder="Ask me anything about your studies..." disabled={loading} />
+            placeholder="Ask anything (coding, math, questions, study concepts, notes)..." disabled={loading} />
           <button type="submit" disabled={loading || !input.trim()}
             className="flex-shrink-0 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 p-3 text-white hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 transition-all">
             <Send size={18} />

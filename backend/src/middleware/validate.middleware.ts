@@ -10,7 +10,7 @@ export function validateBody(schema: ZodSchema) {
       if (error instanceof ZodError) {
         res.status(400).json({
           success: false,
-          error: 'Validation failed',
+          error: error.errors[0]?.message || 'Validation failed',
           details: error.errors.map(err => ({
             field: err.path.join('.'),
             message: err.message,

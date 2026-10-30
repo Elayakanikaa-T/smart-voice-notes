@@ -8,5 +8,6 @@ router.use(authenticate);
 router.get('/', (req, res, next) => progressController.getProgress(req, res, next));
 router.get('/:userId', (req, res, next) => progressController.getProgress(req, res, next));
 router.get('/subjects/:subjectId', (req, res, next) => progressController.getSubjectProgress(req, res, next));
+router.post('/concept-readiness', (req, res, next) => progressController.updateConceptReadiness(req, res, next));
 
 export default router;

@@ -479,17 +479,24 @@ export default function Login() {
 
 {/* OTP is sent to the user's real email — no dev hint exposed */}
 
-              <div>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  autoFocus
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="123456"
-                  className="w-full py-2.5 px-3 bg-slate-950 border border-indigo-500/40 rounded-xl text-center text-xl font-mono tracking-widest text-white focus:outline-none focus:border-indigo-500"
-                />
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300 text-center">
+                  6-Digit Verification Code
+                </label>
+                <div className="flex justify-center">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="· · · · · ·"
+                    className="w-full max-w-xs py-3 px-4 bg-slate-950/80 border-2 border-indigo-500/50 rounded-xl text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-xs">
@@ -592,16 +599,23 @@ export default function Login() {
                 </p>
               </div>
 
-              <div>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="6-digit reset code"
-                  className="w-full py-2 px-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-mono tracking-widest text-white focus:outline-none focus:border-indigo-500"
-                />
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300 text-center">
+                  6-Digit Reset Code
+                </label>
+                <div className="flex justify-center">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="· · · · · ·"
+                    className="w-full max-w-xs py-2.5 px-4 bg-slate-950/80 border-2 border-indigo-500/50 rounded-xl text-center text-xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
+                  />
+                </div>
               </div>
 
               <div>

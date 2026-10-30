@@ -27,6 +27,20 @@ export class ProgressController {
       next(error);
     }
   }
+
+  async updateConceptReadiness(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const result = await progressService.updateConceptReadiness(userId, req.body);
+      res.status(200).json({
+        success: true,
+        message: 'Concept readiness level updated successfully.',
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  }
 }
 
 export const progressController = new ProgressController();

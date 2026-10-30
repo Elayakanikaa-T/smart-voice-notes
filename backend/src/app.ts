@@ -97,7 +97,8 @@ export function createApp(): express.Application {
       status: 'healthy',
       service: 'smart-voice-note-backend',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
+      version: '1.0.1',
+      model: 'gemini-2.0-flash',
       database: {
         mongodb: isMongoConnected ? 'connected' : 'disconnected',
       },

@@ -31,6 +31,17 @@ export class DoubtChatController {
       res.status(400).json({ success: false, error: error.message });
     }
   }
+
+  async clearSession(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const { subjectId } = req.query;
+      await doubtChatService.clearSession(userId, subjectId as string);
+      res.status(200).json({ success: true, message: 'Chat history cleared successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const doubtChatController = new DoubtChatController();

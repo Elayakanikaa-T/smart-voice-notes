@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Briefcase, Plus, Search, Calendar, Clock, AlertCircle, 
+  Briefcase, Search, Calendar, Clock, AlertCircle, 
   CheckCircle2, Loader2, Filter, ChevronRight, Mic,
-  Users, Trash2, Send, Copy, FileText
+  Users, Trash2, Send, Copy, Video, UploadCloud,
+  FileAudio, Plus
 } from 'lucide-react';
 import api from '../../lib/api';
+
+
 
 interface Participant {
   userId?: string;
@@ -29,11 +32,25 @@ export default function Meetings() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Schedule / Quick Meeting Modal
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [participantInput, setParticipantInput] = useState('');
   const [creating, setCreating] = useState(false);
+  const [conductingLive, setConductingLive] = useState(false);
   const [error, setError] = useState('');
+
+  // Upload Previous Meeting Recording Modal
+  const [uploadPastModalOpen, setUploadPastModalOpen] = useState(false);
+  const [pastTitle, setPastTitle] = useState('');
+  const [pastDate, setPastDate] = useState('');
+  const [pastParticipants, setPastParticipants] = useState('');
+  const [pastFile, setPastFile] = useState<File | null>(null);
+  const [uploadingPast, setUploadingPast] = useState(false);
+  const [pastUploadError, setPastUploadError] = useState('');
+  
+  // Delete & Share modals
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [shareModalMeeting, setShareModalMeeting] = useState<MeetingItem | null>(null);
@@ -47,7 +64,7 @@ export default function Meetings() {
       const res = await api.get('/meetings');
       let data = res.data?.data?.meetings || [];
       
-      // Auto-seed dummy data if empty
+      // Auto-seed dummy meeting if empty
       if (data.length === 0) {
         data = await createDummyData();
       }
@@ -62,24 +79,18 @@ export default function Meetings() {
   const createDummyData = async () => {
     try {
       const meetRes = await api.post('/meetings', {
-        title: 'Q3 Strategy & Dummy Sync',
+        title: 'Q3 Strategy & Product Sync',
         participants: [{ name: 'Jane Doe', email: 'jane@company.com' }],
       });
       const meetingId = meetRes.data.data._id;
       
-      // Create decisions
-      await api.post(`/meetings/${meetingId}/decisions`, { text: 'Expand operations to Europe in Q4.' });
-      await api.post(`/meetings/${meetingId}/decisions`, { text: 'Adopt hybrid work policy starting next month.' });
-      
-      // Create action items
+      await api.post(`/meetings/${meetingId}/decisions`, { text: 'Expand operations and launch new AI features in Q4.' });
       await api.post(`/meetings/${meetingId}/action-items`, {
-        task: 'Draft European expansion budget',
+        task: 'Finalize meeting documentation and share with engineering lead',
         owner: { name: 'Jane Doe', email: 'jane@company.com' },
         dueDate: new Date(Date.now() + 86400000 * 5).toISOString(),
       });
       
-      // Create a mock summary on backend side ideally, but this serves as the meeting container.
-      // We will re-fetch to get the updated list
       const updated = await api.get('/meetings');
       return updated.data?.data?.meetings || [];
     } catch (e) {
@@ -91,6 +102,77 @@ export default function Meetings() {
   useEffect(() => {
     fetchMeetings();
   }, []);
+
+  // Conduct a meeting instantly: creates meeting & enters live room
+  const handleConductMeeting = async () => {
+    setConductingLive(true);
+    try {
+      const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const res = await api.post('/meetings', {
+        title: `Live Team Meeting (${dateStr})`,
+        participants: [],
+      });
+      const newMeeting = res.data?.data;
+      navigate(`/meetings/live/${newMeeting._id}/room`);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to start live meeting room.');
+    } finally {
+      setConductingLive(false);
+    }
+  };
+
+  // Upload Previous Meeting Recording
+  const handleUploadPreviousRecording = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pastTitle.trim()) {
+      setPastUploadError('Please enter the previous meeting title.');
+      return;
+    }
+    if (!pastFile) {
+      setPastUploadError('Please select the meeting recording file to upload.');
+      return;
+    }
+
+    setUploadingPast(true);
+    setPastUploadError('');
+
+    try {
+      const parts = pastParticipants
+        .split(',')
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => ({ name: p.split('@')[0], email: p }));
+
+      // 1. Create meeting entry
+      const createRes = await api.post('/meetings', {
+        title: pastTitle.trim(),
+        participants: parts,
+        scheduledAt: pastDate || undefined,
+      });
+
+      const meetingId = createRes.data?.data?._id;
+
+      // 2. Upload the recorded audio/video file
+      const formData = new FormData();
+      formData.append('audio', pastFile, pastFile.name);
+
+      await api.post(`/meetings/${meetingId}/audio`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      // 3. Reset and navigate to meeting details
+      setUploadPastModalOpen(false);
+      setPastTitle('');
+      setPastDate('');
+      setPastParticipants('');
+      setPastFile(null);
+      navigate(`/meetings/${meetingId}`);
+    } catch (err: any) {
+      setPastUploadError(err.response?.data?.error || err.message || 'Failed to upload previous recording.');
+    } finally {
+      setUploadingPast(false);
+    }
+  };
 
   const handleDeleteMeeting = async (meetingId: string) => {
     setDeletingId(meetingId);
@@ -127,14 +209,7 @@ export default function Meetings() {
       .split(',')
       .map(p => p.trim())
       .filter(Boolean)
-      .map(p => {
-        if (p.includes('<') && p.includes('>')) {
-          const name = p.split('<')[0].trim();
-          const email = p.split('<')[1].replace('>', '').trim();
-          return { name, email };
-        }
-        return { name: p.split('@')[0], email: p };
-      });
+      .map(p => ({ name: p.split('@')[0], email: p }));
 
     try {
       const res = await api.post('/meetings', {
@@ -166,12 +241,12 @@ export default function Meetings() {
       case 'done':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Processed
+            <CheckCircle2 className="w-3.5 h-3.5" /> Transcribed
           </span>
         );
       case 'processing':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 animate-pulse">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing AI...
           </span>
         );
@@ -194,67 +269,90 @@ export default function Meetings() {
   const processingCount = meetings.filter(m => m.status === 'processing').length;
 
   return (
-    <div className="p-6 text-white max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
+    <div className="p-6 text-slate-100 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300 font-sans">
       
       {/* Top Header Banner */}
-      <div className="relative rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-emerald-950/30 border border-emerald-500/20 p-6 sm:p-8 shadow-2xl overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 mb-3">
-              <Briefcase className="w-3.5 h-3.5 text-emerald-400" /> Employee Meeting Portal
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 mb-3">
+              <Briefcase className="w-3.5 h-3.5 text-indigo-400" /> Employee Meeting Portal
             </div>
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-              Meeting Intelligence & <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">Action Tracker</span>
+              Meeting Intelligence & <span className="text-indigo-400">Action Tracker</span>
             </h1>
             <p className="text-slate-400 text-sm mt-2 max-w-2xl leading-relaxed">
-              Record voice meetings in-browser or upload recordings to automatically transcribe audio, generate executive summaries, and extract actionable decisions and tasks.
+              Conduct live voice/video meetings, upload previous meeting recordings, automatically generate speech-to-text transcripts, and track team decisions.
             </p>
           </div>
 
+          {/* Action Buttons: Conduct Meeting & Upload Previous Recording */}
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleConductMeeting}
+              disabled={conductingLive}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {conductingLive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
+              <span>Conduct Live Meeting</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setPastUploadError('');
+                setUploadPastModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
+            >
+              <UploadCloud className="w-4 h-4 text-indigo-400" />
+              <span>Upload Past Recording</span>
+            </button>
+
             <Link
               to="/meetings/new"
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all hover:scale-105"
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
             >
-              <Mic className="w-4 h-4" /> Record New Meeting
+              <Mic className="w-4 h-4" />
+              <span>Record In-Browser</span>
             </Link>
+
             <button
               onClick={() => setNewModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> Schedule / Upload
+              <Plus className="w-4 h-4" />
+              <span>Schedule Meeting</span>
             </button>
           </div>
         </div>
 
+
         {/* Quick Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-800/80">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-800">
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Meetings</span>
             <p className="text-2xl font-black text-white mt-1">{meetings.length}</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">AI Processed</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Transcribed</span>
             <p className="text-2xl font-black text-emerald-400 mt-1">{processedCount}</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">In Progress</span>
-            <p className="text-2xl font-black text-amber-400 mt-1">{processingCount}</p>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">In Progress</span>
+            <p className="text-2xl font-black text-indigo-400 mt-1">{processingCount}</p>
           </div>
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">Archive Search</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Archive Search</span>
               <p className="text-xs text-slate-300 mt-1 font-medium">Search Transcripts</p>
             </div>
             <Link
               to="/meeting-search"
-              className="p-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 transition-colors flex items-center gap-1.5 text-xs font-semibold"
-              title="Search Meetings"
+              className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 transition-colors flex items-center gap-1.5 text-xs font-semibold"
             >
               <Search className="w-4 h-4" />
-              <span>Search</span>
             </Link>
           </div>
         </div>
@@ -269,7 +367,7 @@ export default function Meetings() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search meetings by title or participant..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </div>
 
@@ -279,9 +377,9 @@ export default function Meetings() {
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-xl capitalize transition-all whitespace-nowrap ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl capitalize transition-all whitespace-nowrap cursor-pointer ${
                 statusFilter === st
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                   : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
               }`}
             >
@@ -294,109 +392,105 @@ export default function Meetings() {
       {/* Meetings Grid */}
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
           <p className="text-xs text-slate-400 font-medium">Loading meeting archives...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="p-12 rounded-3xl bg-slate-900/60 border border-slate-800/80 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
-            <Briefcase className="w-7 h-7" />
+        <div className="p-12 rounded-3xl bg-slate-900/40 border border-slate-800 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 text-indigo-400 flex items-center justify-center mx-auto border border-indigo-500/20">
+            <Mic className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white">No meetings found</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              {searchTerm || statusFilter !== 'all'
-                ? 'Try adjusting your search criteria or filter to see more meetings.'
-                : 'Start by creating your first meeting to record audio and extract AI summaries.'}
+            <h3 className="text-base font-bold text-white">No Meetings Found</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              Start by conducting a live meeting or uploading a previous recording to build your workspace intelligence archive.
             </p>
           </div>
-          <button
-            onClick={() => setNewModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/30 transition-all"
-          >
-            Create First Meeting
-          </button>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleConductMeeting}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+            >
+              Conduct Live Meeting
+            </button>
+            <button
+              onClick={() => setUploadPastModalOpen(true)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-200 transition-all cursor-pointer"
+            >
+              Upload Previous Recording
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((m) => (
+          {filtered.map((meeting) => (
             <div
-              key={m._id}
-              onClick={() => navigate(`/meetings/${m._id}`)}
-              className="group rounded-3xl bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 p-6 flex flex-col justify-between transition-all duration-200 hover:shadow-xl hover:shadow-emerald-950/20 cursor-pointer"
+              key={meeting._id}
+              className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
             >
-              <div>
-                {/* Status + Date Header */}
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  {getStatusBadge(m.status)}
-                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
-                    <Calendar className="w-3 h-3" />
-                    {new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <h2 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors line-clamp-2">
+                      {meeting.title}
+                    </h2>
+                    <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(meeting.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div>{getStatusBadge(meeting.status)}</div>
                 </div>
-
-                {/* Title */}
-                <h3 className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors line-clamp-2">
-                  {m.title}
-                </h3>
 
                 {/* Participants */}
-                <div className="mt-4 pt-4 border-t border-slate-800/60 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-slate-500" />
-                      {m.participants?.length || 0} Participant(s)
+                {meeting.participants && meeting.participants.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <Users className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="truncate">
+                      {meeting.participants.map(p => p.name || p.email).join(', ')}
                     </span>
-                    {m.status === 'done' && (
-                      <span className="text-blue-400 flex items-center gap-1 text-[11px] font-semibold">
-                        <FileText className="w-3 h-3" /> Transcript Ready
-                      </span>
-                    )}
                   </div>
-
-                  {/* Avatars */}
-                  {m.participants && m.participants.length > 0 && (
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      {m.participants.slice(0, 4).map((p, idx) => (
-                        <div
-                          key={idx}
-                          title={p.name || p.email}
-                          className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-[10px] font-bold flex items-center justify-center text-white border border-slate-900"
-                        >
-                          {(p.name?.[0] || p.email?.[0] || 'U').toUpperCase()}
-                        </div>
-                      ))}
-                      {m.participants.length > 4 && (
-                        <span className="text-[10px] text-slate-400 font-semibold px-1">
-                          +{m.participants.length - 4}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
-              <div className="mt-6 pt-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400 group-hover:text-emerald-300 font-semibold transition-colors flex items-center gap-1">
-                  Open Workspace <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </span>
-
-                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              {/* Bottom Actions */}
+              <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleSendMeetingLink(m)}
-                    className="p-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 transition-colors"
-                    title="Send link to all users / copy link"
+                    onClick={() => handleSendMeetingLink(meeting)}
+                    className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                    title="Send Meeting Link"
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="w-3.5 h-3.5" />
                   </button>
-
                   <button
-                    onClick={() => setConfirmDeleteId(m._id)}
-                    className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors"
-                    title="Delete meeting"
+                    onClick={() => setConfirmDeleteId(meeting._id)}
+                    className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                    title="Delete Meeting"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/meetings/live/${meeting._id}/room`}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold text-xs flex items-center gap-1 transition-all"
+                  >
+                    <Video className="w-3 h-3" />
+                    <span>Join Room</span>
+                  </Link>
+                  <Link
+                    to={`/meetings/${meeting._id}`}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all"
+                  >
+                    <span>Open</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
             </div>
@@ -404,79 +498,111 @@ export default function Meetings() {
         </div>
       )}
 
-      {/* Create New Meeting Modal */}
-      {newModalOpen && (
+      {/* UPLOAD PREVIOUS MEETING RECORDING MODAL */}
+      {uploadPastModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <Briefcase className="w-5 h-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+                  <UploadCloud className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">New Meeting Room</h3>
-                  <p className="text-xs text-slate-400">Initialize a workspace for audio transcription.</p>
+                  <h3 className="font-bold text-white text-base">Upload Past Meeting Recording</h3>
+                  <p className="text-xs text-slate-400">Ingest previous audio/video to run speech-to-text</p>
                 </div>
               </div>
               <button
-                onClick={() => setNewModalOpen(false)}
-                className="text-slate-400 hover:text-white text-sm"
+                onClick={() => setUploadPastModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                <span>{error}</span>
+            {pastUploadError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                <span>{pastUploadError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateMeeting} className="space-y-4">
+            <form onSubmit={handleUploadPreviousRecording} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Title</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Title *</label>
                 <input
                   type="text"
                   required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Q3 Sprint Planning & Budget Review"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  value={pastTitle}
+                  onChange={(e) => setPastTitle(e.target.value)}
+                  placeholder="e.g. Q2 Architecture & Sprint Retrospective"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Date</label>
+                  <input
+                    type="datetime-local"
+                    value={pastDate}
+                    onChange={(e) => setPastDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Participants (Emails)</label>
+                  <input
+                    type="text"
+                    value={pastParticipants}
+                    onChange={(e) => setPastParticipants(e.target.value)}
+                    placeholder="john@company.com"
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* File Upload Box */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Participants (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={participantInput}
-                  onChange={(e) => setParticipantInput(e.target.value)}
-                  placeholder="john@company.com, sarah@company.com"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Optional: Extracted action items will be mapped to these participants.
-                </p>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Recording File (Audio or Video) *</label>
+                <div className="p-6 rounded-2xl bg-slate-950 border border-dashed border-slate-800 hover:border-indigo-500/50 flex flex-col items-center justify-center text-center space-y-3 transition-colors">
+                  <FileAudio className="w-8 h-8 text-indigo-400" />
+                  <div className="text-xs">
+                    <p className="font-semibold text-white">
+                      {pastFile ? pastFile.name : 'Choose an audio or video recording file'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">MP3, WAV, WEBM, M4A, MP4 (up to 200MB)</p>
+                  </div>
+                  <label className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer transition-all">
+                    Browse File
+                    <input
+                      type="file"
+                      accept="audio/*,video/*,.mp3,.wav,.webm,.m4a,.mp4"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setPastFile(file);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
 
-              <div className="flex gap-2 justify-end pt-3">
+              <div className="flex justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setNewModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl transition-colors"
+                  onClick={() => setUploadPastModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !title.trim()}
-                  className="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl shadow-lg shadow-emerald-600/30 disabled:opacity-50 transition-all flex items-center gap-2"
+                  disabled={uploadingPast || !pastFile}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Create & Launch</span>
+                  {uploadingPast && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{uploadingPast ? 'Uploading & Transcribing...' : 'Upload & Transcribe'}</span>
                 </button>
               </div>
             </form>
@@ -487,58 +613,49 @@ export default function Meetings() {
       {/* Delete Confirmation Modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">Delete Meeting?</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  This will permanently delete the meeting, its transcript, summary, decisions, and all action items.
-                </p>
+                <h3 className="font-bold text-white text-sm">Delete Meeting Archive?</h3>
+                <p className="text-xs text-slate-400">All transcripts and action items will be removed.</p>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300">
-              <span className="font-semibold text-white">
-                {meetings.find(m => m._id === confirmDeleteId)?.title || 'Selected meeting'}
-              </span>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-1">
+            <div className="flex gap-3 justify-end pt-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                disabled={deletingId === confirmDeleteId}
-                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDeleteMeeting(confirmDeleteId)}
                 disabled={deletingId === confirmDeleteId}
-                className="px-5 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg shadow-rose-600/30 disabled:opacity-50 transition-all flex items-center gap-2"
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg transition-all flex items-center gap-2"
               >
                 {deletingId === confirmDeleteId && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Yes, Delete</span>
+                <span>Delete</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Share / Send Link Modal */}
+      {/* Share Links Modal */}
       {shareModalMeeting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
                   <Send className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">Meeting Links & Invites Sent!</h3>
-                  <p className="text-xs text-slate-400">Links dispatched to all participants & users.</p>
+                  <h3 className="font-bold text-white text-base">Meeting Links Ready</h3>
+                  <p className="text-xs text-slate-400">Share with participants to conduct or review</p>
                 </div>
               </div>
               <button
@@ -550,7 +667,7 @@ export default function Meetings() {
             </div>
 
             {sendSuccessMsg && (
-              <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{sendSuccessMsg}</span>
               </div>
@@ -559,21 +676,21 @@ export default function Meetings() {
             <div className="space-y-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                  1. Live Room Link (Anyone can join)
+                  Live Meeting Room URL
                 </label>
                 <div className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <input
                     type="text"
                     readOnly
-                    value={`${window.location.origin}/meetings/live/${shareModalMeeting._id}`}
+                    value={`${window.location.origin}/meetings/live/${shareModalMeeting._id}/room`}
                     className="flex-1 bg-transparent text-xs text-white outline-none font-mono"
                   />
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/meetings/live/${shareModalMeeting._id}`);
+                      navigator.clipboard.writeText(`${window.location.origin}/meetings/live/${shareModalMeeting._id}/room`);
                       alert('Live Room link copied!');
                     }}
-                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"
                   >
                     <Copy className="w-3 h-3" /> Copy
                   </button>
@@ -582,7 +699,7 @@ export default function Meetings() {
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                  2. Meeting Workspace Link (Summary, Action Items)
+                  Meeting Workspace URL (Transcript & Actions)
                 </label>
                 <div className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                   <input
@@ -607,14 +724,91 @@ export default function Meetings() {
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setShareModalMeeting(null)}
-                className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-lg shadow-cyan-600/30 transition-all"
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
               >
-                Done
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Schedule Meeting Modal */}
+      {newModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Schedule New Meeting</h3>
+                  <p className="text-xs text-slate-400">Set meeting agenda and participants</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setNewModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateMeeting} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Meeting Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Sprint Planning Sync"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Participants (Emails)</label>
+                <input
+                  type="text"
+                  value={participantInput}
+                  onChange={(e) => setParticipantInput(e.target.value)}
+                  placeholder="alice@company.com, bob@company.com"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || !title.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{creating ? 'Scheduling...' : 'Create Meeting'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

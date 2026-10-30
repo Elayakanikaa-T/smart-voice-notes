@@ -209,8 +209,8 @@ export class MeetingsService {
   ) {
     const meeting = await MeetingModel.findById(meetingId);
     if (!meeting) throw new Error('Meeting not found.');
-    if (role !== 'admin' && meeting.organizer !== userId) {
-      throw new Error('Only the organizer can upload audio.');
+    if (role !== 'admin' && role !== 'employee' && meeting.organizer !== userId) {
+      throw new Error('Only the organizer or team members can upload audio.');
     }
 
     const status = exactTranscriptText && exactTranscriptText.trim() ? 'done' : 'processing';
@@ -251,9 +251,15 @@ export class MeetingsService {
     ]);
 
     if (!meeting) throw new Error('Meeting not found.');
+    const mStatus = (meeting as any).status || 'done';
     return {
       meetingId,
-      meetingStatus: (meeting as any).status,
+      status: mStatus,
+      meetingStatus: mStatus,
+      meeting: {
+        status: mStatus,
+        title: (meeting as any).title,
+      },
       transcription: transcript
         ? { status: (transcript as any).status, error: (transcript as any).errorMessage }
         : null,
@@ -262,6 +268,7 @@ export class MeetingsService {
         : null,
     };
   }
+
 
   async shareMeeting(meetingId: string, customMessage?: string, senderUserId?: string) {
     const meeting = await MeetingModel.findById(meetingId).lean();

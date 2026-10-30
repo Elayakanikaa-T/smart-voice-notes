@@ -8,5 +8,6 @@ router.use(authenticate);
 
 router.get('/', doubtChatController.getSession);
 router.post('/message', doubtChatController.sendMessage);
+router.delete('/', doubtChatController.clearSession);
 
 export const doubtChatRouter = router;

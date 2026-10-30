@@ -35,7 +35,7 @@ interface RecommendationItem {
 export default function StudentHome() {
   const { user } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [readiness, setReadiness] = useState(78);
+  const [readiness, setReadiness] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
   const [quizzesCount, setQuizzesCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -133,27 +133,31 @@ export default function StudentHome() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const [subRes, noteRes, quizRes] = await Promise.all([
+        const [subRes, noteRes, quizRes, progRes] = await Promise.all([
           api.get('/subjects'),
           api.get('/notes?limit=10'),
           api.get('/quizzes'),
+          api.get('/progress').catch(() => ({ data: { data: {} } })),
         ]);
 
         const rawSubs = subRes.data.data?.subjects || subRes.data.data || [];
         const rawNotes = noteRes.data.data?.notes || noteRes.data.data || [];
         const rawQuizzes = quizRes.data.data?.quizzes || quizRes.data.data || [];
+        const progData = progRes.data.data || {};
 
-        // Ensure the 3 fixed subjects are always present
-        const fixedSubjects = [
-          { id: 'data-structures', name: 'Data Structures', description: 'Arrays, Linked Lists, Stacks, Queues, Trees, Graphs, and Sorting Algorithms', icon: '💻', color: '#6366F1' },
-          { id: 'data-analytics', name: 'Data Analytics', description: 'Descriptive Statistics, Regression Analysis, Clustering, and Data Visualization', icon: '📊', color: '#10B981' },
-          { id: 'operating-systems', name: 'Operating Systems', description: 'Process Management, CPU Scheduling, Virtual Memory, Paging, and File Systems', icon: '⚙️', color: '#F59E0B' },
-        ];
+        setSubjects(rawSubs);
+        setNotesCount(rawNotes.length);
+        setQuizzesCount(rawQuizzes.length);
 
-        setSubjects(rawSubs.length > 0 ? rawSubs : fixedSubjects);
-        setNotesCount(rawNotes.length > 0 ? rawNotes.length : 3);
-        setQuizzesCount(rawQuizzes.length > 0 ? rawQuizzes.length : 3);
-        setReadiness(82);
+        // Dynamically compute real concept readiness
+        let computedReadiness = 0;
+        if (typeof progData.readiness_score === 'number' && progData.readiness_score > 0) {
+          computedReadiness = Math.round(progData.readiness_score);
+        } else if (rawNotes.length > 0) {
+          const totalNoteReadiness = rawNotes.reduce((sum: number, n: any) => sum + (n.readiness_level || 0), 0);
+          computedReadiness = Math.round(totalNoteReadiness / rawNotes.length);
+        }
+        setReadiness(computedReadiness);
       } catch (err) {
         console.error('Error loading student dashboard data:', err);
       } finally {
@@ -181,7 +185,7 @@ export default function StudentHome() {
       setDoubtAnswer(lastMsg?.content || 'Here is your clarification based on the lecture materials.');
     } catch {
       // Fallback
-      setDoubtAnswer(`AI Answer: "${doubtQuestion}" is a core concept. In Data Structures and Operating Systems, maintaining optimal time and space complexity is essential.`);
+      setDoubtAnswer(`Clarification for "${doubtQuestion}": Let's look at this directly. Feel free to open the full AI Guide for multi-turn step-by-step problem solving!`);
     } finally {
       setAskingDoubt(false);
     }
@@ -279,26 +283,41 @@ export default function StudentHome() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {subjects.map((sub: any) => {
-            const icon = getSubjectEmoji(sub.name, sub.icon);
+        {subjects.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 p-6">
+            <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30 text-blue-400" />
+            <h3 className="font-bold text-white text-base">No study subjects added yet</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              Create your subjects to capture lecture notes, practice quizzes, and track your concept readiness.
+            </p>
+            <Link
+              to="/student/subjects"
+              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Your First Subject
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {subjects.map((sub: any) => {
+              const icon = getSubjectEmoji(sub.name, sub.icon);
 
-            return (
-              <div key={sub.id} className="rounded-3xl bg-slate-900 border border-slate-800 p-6 flex flex-col justify-between hover:border-slate-700 transition-all shadow-xl">
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-3xl p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 shadow-inner">
-                      {icon}
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-white text-lg">{sub.name}</h3>
-                      <span className="text-xs text-slate-400">Beginner • Intermediate • Advanced</span>
+              return (
+                <div key={sub.id || sub._id} className="rounded-3xl bg-slate-900 border border-slate-800 p-6 flex flex-col justify-between hover:border-slate-700 transition-all shadow-xl">
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-3xl p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 shadow-inner">
+                        {icon}
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-white text-lg">{sub.name}</h3>
+                        <span className="text-xs text-slate-400">Beginner • Intermediate • Advanced</span>
+                      </div>
                     </div>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-6">
+                      {sub.description}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed mb-6">
-                    {sub.description}
-                  </p>
-                </div>
 
                   <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800">
                     <Link
@@ -320,10 +339,11 @@ export default function StudentHome() {
                       Topics
                     </Link>
                   </div>
-              </div>
-            );
-          })}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* AI Doubt-Clarification Instant Assistant Box */}

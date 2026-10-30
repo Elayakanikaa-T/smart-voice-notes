@@ -12,6 +12,7 @@ async function startServer() {
   await connectMongo();
 
   initializeAIWorkers();
+
   remindersCron.start();
 
   const app = createApp();

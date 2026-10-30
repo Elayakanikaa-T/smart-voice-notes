@@ -1,4 +1,4 @@
-import { ProgressModel, QuizResultModel, SubjectModel, LearningPathModel } from '../../models/index.js';
+import { ProgressModel, QuizResultModel, SubjectModel, LearningPathModel, AudioNoteModel, SummaryModel } from '../../models/index.js';
 
 export class ProgressService {
   async getProgress(userId: string) {
@@ -10,7 +10,7 @@ export class ProgressService {
 
     const overall = progressRecords.length > 0
       ? Math.round(progressRecords.reduce((a, p) => a + p.readiness_score, 0) / progressRecords.length)
-      : 80;
+      : 0;
 
     const learningPathOverall = progressRecords.length > 0
       ? Math.round(progressRecords.reduce((a, p) => a + (p.learning_path_pct || p.material_coverage_pct || 0), 0) / progressRecords.length)
@@ -51,6 +51,61 @@ export class ProgressService {
       weakAreas: record.weak_topics,
       strongAreas: record.strong_topics,
       quizAttempts: record.quiz_attempts,
+    };
+  }
+
+  async updateConceptReadiness(userId: string, data: { subjectId?: string; noteId?: string; readinessLevel: number; isDone?: boolean; topicName?: string }) {
+    const level = Math.max(0, Math.min(100, Math.round(Number(data.readinessLevel) || 0)));
+    let targetSubjectId = data.subjectId;
+
+    if (data.noteId) {
+      const note: any = await AudioNoteModel.findById(data.noteId).lean().catch(() => null);
+      if (note) {
+        targetSubjectId = targetSubjectId || note.subject_id;
+        await AudioNoteModel.findByIdAndUpdate(data.noteId, {
+          $set: {
+            readiness_level: level,
+            is_completed: data.isDone ?? (level >= 80),
+            updated_at: new Date(),
+          }
+        }).catch(() => {});
+
+        await SummaryModel.findOneAndUpdate(
+          { note_id: data.noteId },
+          { $set: { readiness_score: level, updated_at: new Date() } }
+        ).catch(() => {});
+      }
+    }
+
+    if (targetSubjectId) {
+      const allNotes: any[] = await AudioNoteModel.find({ subject_id: targetSubjectId, is_archived: false }).lean().catch(() => []);
+      const readinessScores = allNotes.map(n => n.readiness_level || 0);
+      const avgSubjectReadiness = readinessScores.length > 0
+        ? Math.round(readinessScores.reduce((a, b) => a + b, 0) / readinessScores.length)
+        : level;
+
+      await ProgressModel.findOneAndUpdate(
+        { user_id: userId, subject_id: targetSubjectId },
+        {
+          $set: {
+            readiness_score: Math.max(avgSubjectReadiness, level),
+            last_updated: new Date(),
+          }
+        },
+        { upsert: true }
+      ).catch(() => {});
+
+      await SubjectModel.findByIdAndUpdate(targetSubjectId, {
+        $set: { readiness_score: Math.max(avgSubjectReadiness, level) }
+      }).catch(() => {});
+    }
+
+    return {
+      success: true,
+      readinessLevel: level,
+      isDone: data.isDone ?? (level >= 80),
+      subjectId: targetSubjectId,
+      noteId: data.noteId,
     };
   }
 

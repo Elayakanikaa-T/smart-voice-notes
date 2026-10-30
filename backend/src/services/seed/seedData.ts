@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
+  UserModel,
   SubjectModel,
   AudioNoteModel,
   TranscriptModel,
@@ -9,7 +10,10 @@ import {
   ProgressModel,
   ReminderModel,
 } from '../../models/index.js';
+import { hashPassword } from '../../utils/crypto.js';
 import { ALL_CURRICULUM_SUBJECTS } from './curriculumData.js';
+
+
 
 export const SUBJECTS = ALL_CURRICULUM_SUBJECTS.map(sub => ({
   name: sub.name,
@@ -289,3 +293,4 @@ Always evaluate space-time complexity trade-offs, enforce invariants, and test e
     question_count: 16,
   }).catch(() => {});
 }
+

@@ -17,6 +17,7 @@ export interface IUser extends Document<string> {
   email: string;
   password_hash: string;
   role: 'student' | 'admin' | 'employee';
+  email_verified: boolean;
   preferred_language: string;
   theme_pref: 'dark' | 'light' | 'system';
   avatar_url?: string;
@@ -45,6 +46,7 @@ export const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     password_hash: { type: String, required: true },
     role: { type: String, enum: ['student', 'admin', 'employee'], default: 'student' },
+    email_verified: { type: Boolean, default: false },
     preferred_language: { type: String, default: 'en' },
     theme_pref: { type: String, enum: ['dark', 'light', 'system'], default: 'system' },
     avatar_url: { type: String },

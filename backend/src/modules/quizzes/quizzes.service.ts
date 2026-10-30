@@ -1,9 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import { QuizModel, QuizResultModel, ProgressModel, SubjectModel } from '../../models/index.js';
+import { QuizModel, QuizResultModel, ProgressModel, SubjectModel, AudioNoteModel, TranscriptModel, SummaryModel } from '../../models/index.js';
+import { getLLMProvider } from '../../services/ai/index.js';
 
 export class QuizzesService {
   async getQuizzes(userId: string, subjectId?: string, noteId?: string) {
-    const filter: any = {};
+    const filter: any = { user_id: userId };
     if (subjectId && subjectId !== 'all') {
       filter.$or = [
         { subject_id: subjectId },
@@ -15,20 +16,12 @@ export class QuizzesService {
 
     let docs = await QuizModel.find(filter).sort({ created_at: -1 }).lean();
 
-    // If no quizzes exist at all in DB, seed the curriculum
-    if (docs.length === 0 && (!subjectId || subjectId === 'all') && !noteId) {
-      const { seedUserData } = await import('../../services/seed/seedData.js');
-      await seedUserData(userId).catch(() => {});
-      docs = await QuizModel.find(filter).sort({ created_at: -1 }).lean();
-    }
-
     // Deduplicate quizzes: keep only 1 quiz per topic / title
     const seenTopics = new Set<string>();
     const uniqueDocs: any[] = [];
     const duplicateIds: any[] = [];
 
     for (const doc of docs) {
-      // Normalize key by title and topic_tag
       const normalizedTitle = (doc.title || '').replace(/—.*$/, '').trim().toLowerCase();
       const normalizedTopic = (doc.topic_tag || '').trim().toLowerCase();
       const dedupKey = normalizedTopic || normalizedTitle || String(doc._id);
@@ -41,7 +34,6 @@ export class QuizzesService {
       }
     }
 
-    // Purge duplicate repeated quiz documents from the database in the background
     if (duplicateIds.length > 0) {
       QuizModel.deleteMany({ _id: { $in: duplicateIds } }).catch(() => {});
     }
@@ -223,6 +215,77 @@ export class QuizzesService {
       question_count: data.questions.length,
       questions: data.questions,
       created_at: new Date(),
+    };
+  }
+
+  async generateQuizFromNote(userId: string, data: { noteId: string; count?: number; difficulty?: string }) {
+    const { noteId } = data;
+    const note: any = await AudioNoteModel.findOne({ _id: noteId, user_id: userId }).lean() ||
+                      await AudioNoteModel.findOne({ _id: noteId }).lean();
+    if (!note) {
+      throw new Error('Note not found. Please select a valid note to generate a quiz.');
+    }
+
+    const [transcriptDoc, summaryDoc]: [any, any] = await Promise.all([
+      TranscriptModel.findOne({ note_id: noteId }).lean(),
+      SummaryModel.findOne({ note_id: noteId }).lean(),
+    ]);
+
+    const content = transcriptDoc?.raw_text || summaryDoc?.summary_text || note.title;
+    const llm = getLLMProvider();
+    const count = data.count || 5;
+    const difficulty = data.difficulty || 'medium';
+
+    const rawQuestions = await llm.generateQuiz(content, count, difficulty);
+    const quizId = uuidv4();
+    const formattedQuestions = rawQuestions.map((q: any, i: number) => {
+      const opts = q.options && q.options.length >= 4 ? q.options : [
+        q.correctAnswer || `Key verified concept regarding ${note.title}`,
+        'An inverted behavior counter to what is stated in the notes.',
+        'An unrelated secondary concept not referenced in this study material.',
+        'None of the above principles apply.'
+      ];
+      const cIdx = typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0;
+      const cAns = q.correctAnswer || opts[cIdx];
+      opts[cIdx] = cAns;
+
+      return {
+        questionId: q.questionId || `q-${i + 1}`,
+        question: q.question || `Based on your note "${note.title}", what is stated regarding this concept?`,
+        options: opts,
+        correct_index: cIdx,
+        correct_answer: cAns,
+        explanation: q.explanation || `Derived directly from your verified note "${note.title}".`,
+        hint: q.hint || `Recall the key principle stated in your note regarding ${note.title}.`,
+        level: Math.floor(i / 2) + 1,
+        difficulty,
+        topic_tag: note.title,
+      };
+    });
+
+    await QuizModel.create({
+      _id: quizId,
+      user_id: userId,
+      subject_id: note.subject_id,
+      audio_note_id: noteId,
+      topic_tag: note.title,
+      title: `${note.title} Quiz`,
+      difficulty,
+      questions: formattedQuestions,
+      question_count: formattedQuestions.length,
+    });
+
+    await AudioNoteModel.updateOne({ _id: noteId }, { $set: { has_quiz: true } });
+
+    return {
+      id: quizId,
+      _id: quizId,
+      userId,
+      subject_id: note.subject_id,
+      title: `${note.title} Quiz`,
+      difficulty,
+      questions: formattedQuestions,
+      question_count: formattedQuestions.length,
     };
   }
 

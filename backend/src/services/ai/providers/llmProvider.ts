@@ -217,54 +217,83 @@ export class MockLLMProvider implements ILLMProvider {
   }
 
   async generateQuiz(transcript: string, count: number = 5, difficulty: string = 'medium'): Promise<QuizQuestionItem[]> {
-    logger.info(`[LLM:Dynamic] Generating quiz questions from user transcript...`);
+    logger.info(`[LLM:Dynamic] Generating accurate quiz questions directly from user notes...`);
     await new Promise(resolve => setTimeout(resolve, 150));
 
-    const sentences = (transcript || '')
+    const clean = (transcript || '').trim();
+    const sentences = clean
       .split(/(?<=[.?!])\s+|\n+/)
       .map(s => s.trim())
-      .filter(s => s.length > 10);
+      .filter(s => s.length > 12);
 
     const quiz: QuizQuestionItem[] = [];
     const limit = Math.min(count, Math.max(1, sentences.length));
 
     for (let i = 0; i < limit; i++) {
-      const targetSentence = sentences[i];
+      const sentence = sentences[i];
       const otherSentences = sentences.filter((_, idx) => idx !== i);
 
-      const wrongOpt1 = otherSentences[0] || 'This statement was not mentioned in the recording.';
-      const wrongOpt2 = otherSentences[1] || 'This concept is unrelated to the recorded topic.';
-      const wrongOpt3 = 'None of the above principles apply.';
+      // Extract subject/topic anchor from sentence
+      const words = sentence.split(/\s+/).filter(w => w.length > 3);
+      const mainWord = words[0] || 'the core topic';
+      const secondaryWord = words[Math.min(3, words.length - 1)] || 'operational mechanism';
 
-      const options = [targetSentence, wrongOpt1, wrongOpt2, wrongOpt3].sort(() => 0.5 - Math.random());
-      const correctIndex = options.indexOf(targetSentence);
+      // Clean distractor sentences
+      const d1 = otherSentences[0] 
+        ? `It requires that ${otherSentences[0].toLowerCase().replace(/^[a-z]/, c => c.toUpperCase())}`
+        : `It operates with the exact inverse behavior of ${mainWord}.`;
+      const d2 = otherSentences[1]
+        ? `It asserts that ${otherSentences[1].toLowerCase().replace(/^[a-z]/, c => c.toUpperCase())}`
+        : `It solely applies to external unverified inputs without validating ${secondaryWord}.`;
+      const d3 = `It completely bypasses ${secondaryWord} and executes without deterministic guarantees.`;
+
+      // Formulate a realistic question based on the note
+      let qText = `According to your notes, which of the following is accurate regarding ${mainWord}?`;
+      if (sentence.includes('is ') || sentence.includes('are ')) {
+        qText = `Based on your notes, what is stated about ${mainWord}?`;
+      } else if (sentence.includes('because') || sentence.includes('due to') || sentence.includes('since')) {
+        qText = `According to the note, what causes or explains the behavior of ${mainWord}?`;
+      } else if (sentence.includes('algorithm') || sentence.includes('method') || sentence.includes('process')) {
+        qText = `Which mechanism or rule applies to ${mainWord} according to the notes?`;
+      }
+
+      // Distribute correct index across 0, 1, 2, 3
+      const rawOptions = [sentence, d1, d2, d3];
+      const targetCorrectIdx = i % 4; // Cycles nicely across A, B, C, D
+      // Swap sentence into targetCorrectIdx
+      const temp = rawOptions[targetCorrectIdx];
+      rawOptions[targetCorrectIdx] = sentence;
+      rawOptions[0] = targetCorrectIdx === 0 ? sentence : temp;
+
+      const hintText = `Recall what your notes state regarding "${words.slice(0, 4).join(' ')}".`;
 
       quiz.push({
         questionId: `q-${i + 1}`,
-        question: `According to your recording, which of the following statements is TRUE?`,
-        options,
-        correctIndex: Math.max(0, correctIndex),
-        explanation: `Direct quote from note: "${targetSentence}"`,
-        difficulty: difficulty as any,
-        topicTag: 'Content Mastery',
+        question: qText,
+        options: rawOptions,
+        correctIndex: targetCorrectIdx,
+        explanation: `Verified directly from your notes: "${sentence}"`,
+        difficulty: (difficulty as any) || (i < 2 ? 'easy' : 'medium'),
+        topicTag: mainWord,
         bloomTaxonomyLevel: 'Understand',
       });
     }
 
     if (quiz.length === 0) {
+      const fallbackTopic = clean.slice(0, 60) || 'Study Topic';
       quiz.push({
         questionId: 'q-1',
-        question: 'What is the primary topic described in your voice recording?',
+        question: `What primary statement is recorded in your study note regarding "${fallbackTopic}"?`,
         options: [
-          transcript.slice(0, 80) || 'Active Voice Note Topic',
-          'A completely unrelated topic',
-          'Outdated archived material',
-          'None of the above'
+          clean.slice(0, 120) || 'Core principles recorded in this note.',
+          'An inverted statement with opposite complexity bounds.',
+          'An unrelated external concept not referenced in the text.',
+          'A deprecated legacy protocol without formal specification.'
         ],
         correctIndex: 0,
-        explanation: 'Derived directly from your voice note.',
+        explanation: `Derived directly from your verified note transcript: "${clean.slice(0, 120)}"`,
         difficulty: 'easy',
-        topicTag: 'General',
+        topicTag: 'General Review',
         bloomTaxonomyLevel: 'Remember',
       });
     }
@@ -488,147 +517,178 @@ export class MockLLMProvider implements ILLMProvider {
   }
 
   async answerDoubt(messages: any[], context?: string): Promise<string> {
-    logger.info(`[LLM:Dynamic] Generating clean text educational answer for doubt query...`);
+    logger.info(`[LLM:Dynamic] Generating intelligent conversational AI answer...`);
     await new Promise(resolve => setTimeout(resolve, 200));
-    
+
     const lastMessage = messages && messages.length > 0 ? messages[messages.length - 1].content || '' : '';
-    const q = lastMessage.toLowerCase().trim();
+    const q = lastMessage.trim();
+    const qLower = q.toLowerCase();
 
-    // Check if query matches curriculum topics for deep verified breakdown
-    const topicMap: Record<string, string> = {
-      'array': 'Arrays and Dynamic Arrays',
-      'dynamic array': 'Arrays and Dynamic Arrays',
-      'linked list': 'Linked Lists and Doubly Linked Lists',
-      'doubly linked list': 'Linked Lists and Doubly Linked Lists',
-      'stack': 'Stacks and LIFO Structures',
-      'queue': 'Queues and Circular Buffers',
-      'priority queue': 'Priority Queues and Binary Heaps',
-      'heap': 'Priority Queues and Binary Heaps',
-      'bst': 'Binary Search Trees and Self-Balancing AVL Trees',
-      'binary search tree': 'Binary Search Trees and Self-Balancing AVL Trees',
-      'avl': 'Binary Search Trees and Self-Balancing AVL Trees',
-      'graph': 'Graph Traversal and Dijkstra Shortest Path',
-      'bfs': 'Breadth-First Search (BFS)',
-      'dfs': 'Depth-First Search (DFS)',
-      'dijkstra': 'Dijkstra Shortest Path Algorithm',
-      'process': 'Process Management and Process Control Block (PCB)',
-      'pcb': 'Process Management and Process Control Block (PCB)',
-      'thread': 'Threads, Processes and Concurrency',
-      'context switch': 'Context Switching in Operating Systems',
-      'scheduling': 'CPU Scheduling Algorithms (FCFS, SJF, Round Robin)',
-      'fcfs': 'CPU Scheduling Algorithms (FCFS, SJF, Round Robin)',
-      'sjf': 'CPU Scheduling Algorithms (FCFS, SJF, Round Robin)',
-      'round robin': 'CPU Scheduling Algorithms (FCFS, SJF, Round Robin)',
-      'memory': 'Main Memory Management, Paging and Segmentation',
-      'paging': 'Memory Management and Paging Architecture',
-      'tlb': 'Translation Lookaside Buffer (TLB)',
-      'virtual memory': 'Virtual Memory, Demand Paging and Page Replacement',
-      'page fault': 'Virtual Memory, Demand Paging and Page Replacement',
-      'lru': 'Page Replacement Algorithms (LRU, FIFO, Clock)',
-      'thrashing': 'Virtual Memory Thrashing and Working Set Model',
-      'file system': 'File Systems, Inodes and Disk Scheduling',
-      'inode': 'File Systems, Inodes and Disk Scheduling',
-      'disk': 'Disk Scheduling Algorithms (SCAN, C-SCAN, SSTF)',
-      'descriptive statistics': 'Descriptive Statistics and Central Tendency',
-      'mean': 'Descriptive Statistics and Central Tendency',
-      'median': 'Descriptive Statistics and Central Tendency',
-      'mode': 'Descriptive Statistics and Central Tendency',
-      'variance': 'Measures of Dispersion and Standard Deviation',
-      'standard deviation': 'Measures of Dispersion and Standard Deviation',
-      'eda': 'Exploratory Data Analysis and Data Preprocessing',
-      'preprocessing': 'Exploratory Data Analysis and Data Preprocessing',
-      'imputation': 'Missing Data Imputation Strategies',
-      'linear regression': 'Simple and Multiple Linear Regression (OLS)',
-      'ols': 'Simple and Multiple Linear Regression (OLS)',
-      'r-squared': 'Regression Evaluation Metrics and R-Squared',
-      'logistic regression': 'Logistic Regression and Binary Classification',
-      'sigmoid': 'Logistic Regression and Binary Classification',
-      'roc': 'Classification Metrics (Precision, Recall, ROC-AUC)',
-      'auc': 'Classification Metrics (Precision, Recall, ROC-AUC)',
-      'k-means': 'K-Means Clustering Algorithm',
-      'clustering': 'K-Means Clustering and Unsupervised Learning',
-      'pca': 'Principal Component Analysis (PCA) Dimensionality Reduction',
-      'dimensionality reduction': 'Principal Component Analysis (PCA)'
-    };
+    // 0. Conversational Greetings, Pleasantries & Assistant Identity
+    const isGreeting = /^(hi|hello|hey|good\s+morning|good\s+afternoon|good\s+evening|good\s+night|howdy|greetings)\b/i.test(qLower) ||
+                       /^(morning|afternoon|evening)[!.\s]*$/i.test(qLower) ||
+                       /\b(good\s+morning)\b/i.test(qLower);
+    if (isGreeting) {
+      if (/good\s+morning/i.test(qLower)) {
+        return `Good morning! ☀️ How are you doing today? I am your AI assistant, ready to help you with anything — whether it's answering questions, explaining concepts, solving problems, writing code, or reviewing your lecture notes. What would you like to explore today?`;
+      }
+      if (/good\s+afternoon/i.test(qLower)) {
+        return `Good afternoon! 🌤️ How is your day going? Feel free to ask me anything about your studies, code, or general questions!`;
+      }
+      if (/good\s+evening/i.test(qLower)) {
+        return `Good evening! 🌙 How can I assist you tonight? Let me know what you'd like to work on!`;
+      }
+      if (/good\s+night/i.test(qLower)) {
+        return `Good night! 😴 Rest well. Whenever you're ready to study or ask questions, I'll be right here!`;
+      }
+      return `Hello! 👋 How can I help you today? Feel free to ask me anything — from code, math, and concepts to exam review or general questions!`;
+    }
 
-    let matchingCurriculumTopic: any = null;
-    for (const sub of ALL_CURRICULUM_SUBJECTS) {
-      for (const t of sub.topics) {
-        const tName = t.topicName.toLowerCase();
-        const tTitle = t.title.toLowerCase();
-        const words = q.split(/\s+/).filter((w: string) => w.length > 2);
-        if (q.includes(tName) || tName.includes(q) || words.some((w: string) => tName.includes(w) || tTitle.includes(w))) {
-          matchingCurriculumTopic = t;
-          break;
+    if (/^(how are you|how's it going|how are things|how do you do)[!.\s\?]*$/i.test(qLower)) {
+      return `I'm doing great, thank you for asking! 😊 How are your studies coming along today? What would you like to dive into?`;
+    }
+
+    if (/^(who are you|what are you|what can you do|introduce yourself|tell me about yourself)[!.\s\?]*$/i.test(qLower)) {
+      return `I am your AI assistant and study companion, designed to work just like ChatGPT and Claude! Here is what I can do:
+
+- **Answer Any Question:** Ask me about science, engineering, humanities, language, or general knowledge.
+- **Write & Debug Code:** Clean, production-ready code in Python, JavaScript/TypeScript, Java, C++, SQL, and more.
+- **Solve Math & Logic:** Step-by-step solutions for algebra, calculus, discrete math, and algorithms.
+- **Analyze Lecture Notes:** Summaries, key takeaways, and flashcards based on your study materials.
+- **Generate Custom Quizzes:** Test your knowledge and prepare for exams.
+
+What can I help you with right now?`;
+    }
+
+    if (/^(thank you|thanks|thx|thank you so much|appreciate it)[!.\s]*$/i.test(qLower)) {
+      return `You're very welcome! 😊 Don't hesitate to ask if there's anything else you need. Happy studying!`;
+    }
+
+    if (/^(bye|goodbye|see you|cya|take care)[!.\s]*$/i.test(qLower)) {
+      return `Goodbye! 👋 Have a wonderful day ahead, and feel free to return whenever you have questions!`;
+    }
+
+    if (/^(ok|okay|cool|nice|great|awesome|got it|understood|yes|no)[!.\s]*$/i.test(qLower)) {
+      return `Sounds good! Let me know what question or topic you'd like to tackle next.`;
+    }
+
+    // 1. If study context was provided, check if the question directly pertains to it
+    if (context && context.trim().length > 10) {
+      const c = context.trim();
+      const cSentences = c.split(/(?<=[.?!])\s+|\n+/).filter(s => s.length > 15);
+      const relevant = cSentences.filter(s => {
+        const words = qLower.split(/\s+/).filter(w => w.length > 3);
+        return words.some(w => s.toLowerCase().includes(w));
+      });
+
+      if (relevant.length > 0) {
+        return `Based on your study notes:\n\n${relevant.slice(0, 3).map(s => `• ${s}`).join('\n\n')}\n\n**Takeaway:** This directly addresses your question regarding "${q}". Feel free to ask if you'd like me to elaborate or generate practice questions on this topic!`;
+      }
+    }
+
+    // 2. Math & Arithmetic Handling
+    const mathMatch = q.match(/(?:what is|calculate|evaluate|solve)?\s*([0-9\.\s\+\-\*\/\^\(\)]+)(?:\?)?$/i);
+    if (mathMatch && mathMatch[1] && /[0-9]/.test(mathMatch[1]) && /[\+\-\*\/]/.test(mathMatch[1])) {
+      try {
+        const sanitized = mathMatch[1].replace(/[^0-9\+\-\*\/\.\(\)\s]/g, '');
+        // Safe evaluation of basic arithmetic
+        const res = Function(`'use strict'; return (${sanitized})`)();
+        if (typeof res === 'number' && !isNaN(res)) {
+          return `**Result:**\n\n\`\`\`\n${sanitized.trim()} = ${res}\n\`\`\`\n\nIf you have a more complex formula or algebraic equation to solve, feel free to share it!`;
         }
+      } catch {}
+    }
+
+    // 3. Code Generation & Programming Requests
+    if (/\b(python|javascript|typescript|c\+\+|java|html|css|sql|rust|golang|write code|code for|implement|function|program|script|regex)\b/i.test(qLower)) {
+      if (qLower.includes('python') || qLower.includes('script') || qLower.includes('reverse') || qLower.includes('string')) {
+        return `Here is a clean implementation in Python:
+
+\`\`\`python
+def solution(data):
+    """
+    Solves: ${q}
+    """
+    # Clean, idiomatic approach
+    if isinstance(data, str):
+        return data[::-1]
+    return list(reversed(data))
+
+# Example usage:
+if __name__ == "__main__":
+    sample = "Hello, World!"
+    print(f"Original: {sample}")
+    print(f"Result:   {solution(sample)}")
+\`\`\`
+
+### Explanation:
+1. **Time Complexity:** O(N) where N is the length of the input.
+2. **Space Complexity:** O(N) for string slicing or O(1) in-place for mutable lists.
+3. **Usage:** Works with both strings and standard iterable collections.
+
+Let me know if you would like this adapted for a specific edge case or another programming language!`;
       }
-      if (matchingCurriculumTopic) break;
-    }
 
-    if (matchingCurriculumTopic) {
-      return `Comprehensive Topic Breakdown: ${matchingCurriculumTopic.topicName}
+      if (qLower.includes('javascript') || qLower.includes('typescript') || qLower.includes('react')) {
+        return `Here is the requested solution in TypeScript / JavaScript:
 
-${matchingCurriculumTopic.transcript}
+\`\`\`typescript
+export function executeTask(input: any): any {
+  // Implementation for: ${q}
+  console.log("Processing input:", input);
+  return {
+    success: true,
+    result: input,
+    timestamp: new Date().toISOString()
+  };
+}
+\`\`\`
 
-Verified Educational References & Original Course Resources:
-- Standard Academic Curriculum: Cormen, Leiserson, Rivest, Stein (CLRS) Introduction to Algorithms, 4th Edition
-- Operating System Concepts (Silberschatz, Galvin, Gagne, 10th Edition)
-- An Introduction to Statistical Learning (James, Witten, Hastie, Tibshirani, Springer)
-- MIT OpenCourseWare (OCW) Electrical Engineering & Computer Science Department`;
-    }
+### Key Features:
+- Fully typed with TypeScript support.
+- Production-ready error boundaries and standard modular export.
 
-    let matchedTopic = '';
-    for (const [kw, name] of Object.entries(topicMap)) {
-      if (q.includes(kw)) {
-        matchedTopic = name;
-        break;
+Let me know if you'd like to extend this logic!`;
       }
     }
 
-    const topicTitle = matchedTopic || lastMessage.replace(/what is|explain|tell me about|how does/gi, '').trim() || 'Core Computer Science and Data Science';
+    // 4. Comparison Queries ("Difference between X and Y")
+    const diffMatch = q.match(/(?:difference between|compare|versus|vs)\s+([^and\?]+)\s+(?:and|vs)\s+([^?\.]+)/i);
+    if (diffMatch) {
+      const itemA = diffMatch[1].trim();
+      const itemB = diffMatch[2].trim();
+      return `### Key Differences: ${itemA} vs ${itemB}
 
-    return `Comprehensive Study Guide: ${topicTitle}
+| Attribute | **${itemA}** | **${itemB}** |
+| :--- | :--- | :--- |
+| **Primary Purpose** | Specialized for isolated execution and defined state boundaries | Optimized for shared resource utilization and throughput |
+| **Resource Overhead** | Typically heavier allocation footprint | Lightweight with shared memory contexts |
+| **Typical Use Case** | Robust fault isolation across standalone components | High-concurrency tasks requiring fast context switching |
 
-1. Definition:
-${topicTitle} is a foundational concept in computer science and data analytics. It establishes structured rules, mathematical models, and operational invariants for organizing resources, analyzing data, and executing algorithms reliably.
+### Summary:
+- **${itemA}:** Best when isolation, predictability, and independent lifecycle management are paramount.
+- **${itemB}:** Preferred when low overhead, high concurrency, and rapid inter-communication are required.
 
-2. Step-by-Step Explanation and Mechanism:
-- Phase 1 (Initialization and Layout): The system establishes base memory, pointers, or parameter weights.
-- Phase 2 (Execution and Traversal): Operations proceed according to strict algorithmic rules (e.g. constant index calculation, pointer dereferencing, or iterative optimization).
-- Phase 3 (Complexity and Termination): Guaranteed asymptotic bounds ensure execution finishes within predictable time and space constraints.
+Would you like a deeper architectural breakdown or concrete code examples comparing them?`;
+    }
 
-3. Key Concepts and Subtopics:
-- Core Architecture: Data layout, memory bounds, and operational state machines.
-- Performance Guarantees: Time complexity (Average vs Worst-Case) and auxiliary space bounds.
-- System Invariants: Pre-conditions and post-conditions that remain true before and after every operation.
+    // 5. General Knowledge, Explanations & Direct Answers (ChatGPT/Claude style)
+    const cleanTopic = q.replace(/^(what is|explain|tell me about|how does|can you explain|why is|describe)\s+/i, '').replace(/\?+$/, '').trim();
 
-4. Concrete Practical Example:
-- Implementation Pattern: In software engineering, this structure is implemented using standard modular interfaces (e.g. C++ STL std::vector/map, Java java.util, or Python collections/scikit-learn).
-- Trace: Given input of size N, the system reads base addresses, applies transformations in discrete steps, and returns deterministic results.
+    return `### ${cleanTopic.charAt(0).toUpperCase() + cleanTopic.slice(1)}
 
-5. Real-World Applications:
-- Production Infrastructure: Operating system kernels, database storage engines, and high-frequency routing protocols.
-- Machine Learning and Analytics: High-dimensional feature processing, predictive modeling, and automated decision pipelines.
+Here is a clear and direct answer:
 
-6. Advantages and Trade-offs:
-- Advantages: High determinism, optimal asymptotic bounds, and clean modular decoupling.
-- Limitations: Potential memory overhead when scaling dynamically, or synchronization locking costs in multithreaded systems.
+1. **Explanation & Core Concepts:**
+   - **${cleanTopic}** is best understood by examining its primary function, key mechanisms, and real-world importance.
+   - It provides structured principles for reasoning, problem-solving, and practical applications in its domain.
 
-7. Common Student Mistakes and Exam Pitfalls:
-- Confusing worst-case single-operation latency with amortized average performance.
-- Overlooking boundary edge cases (such as null pointers, off-by-one indices, or division by zero).
-- Forgetting prerequisite assumptions (e.g. non-negative edge weights or linear independence).
+2. **Key Takeaways:**
+   - Focus on understanding the foundational definitions and how it connects to related topics.
+   - Pay attention to boundary conditions and practical constraints.
 
-8. Quick Revision Points:
-- Understand the core definition and underlying data structures.
-- Remember standard time and space complexities (O(1), O(log n), O(n), O(n log n)).
-- Connect theory to practical implementations in your subject notes.
-
-9. Verified Educational References:
-- Cormen, Leiserson, Rivest, Stein (CLRS), "Introduction to Algorithms", 4th Edition, MIT Press.
-- Silberschatz, Galvin, Gagne, "Operating System Concepts", 10th Edition, Wiley.
-- James, Witten, Hastie, Tibshirani, "An Introduction to Statistical Learning" (ISLR), Springer.
-- MIT OpenCourseWare (OCW) Electrical Engineering and Computer Science Department.`;
+3. **Next Steps:**
+   - Would you like a step-by-step example, code snippet, or a practice quiz question on this?`;
   }
 }
 
@@ -695,14 +755,18 @@ export class OpenAILLMProvider implements ILLMProvider {
 
   async generateQuiz(transcript: string, count: number = 5, difficulty: string = 'medium'): Promise<QuizQuestionItem[]> {
     logger.info(`[LLM:OpenAI] Generating ${count} MCQ quiz questions at ${difficulty} level...`);
-    const prompt = `Generate exactly ${count} multiple choice questions at ${difficulty} difficulty from the following transcript. Output strictly as a JSON object containing an array called "questions" matching this schema:
+    const prompt = `Generate exactly ${count} multiple choice questions at ${difficulty} difficulty based strictly on the following transcript/notes.
+Every question must be accurate and directly based on the provided notes.
+Output strictly as a JSON object containing an array called "questions" matching this schema:
     {"questions": [
       {
         "questionId": "unique_string",
         "question": "string",
-        "options": ["string", "string", "string", "string"],
-        "correctIndex": 0-3,
-        "explanation": "string",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correctIndex": 0,
+        "correctAnswer": "Exact string of correct option matching options[correctIndex]",
+        "hint": "A helpful learning hint that guides the student towards the answer without directly revealing it",
+        "explanation": "Clear explanation referencing the note text",
         "difficulty": "easy|medium|hard",
         "topicTag": "string",
         "bloomTaxonomyLevel": "Remember|Understand|Apply|Analyze|Evaluate"
@@ -777,24 +841,15 @@ export class OpenAILLMProvider implements ILLMProvider {
   }
 
   async answerDoubt(messages: any[], context?: string): Promise<string> {
-    logger.info(`[LLM:OpenAI] Answering doubt...`);
-    const lastMessage = messages && messages.length > 0 ? messages[messages.length - 1].content || '' : '';
-    const q = lastMessage.toLowerCase().trim();
-    let curriculumResourceText = '';
-    for (const sub of ALL_CURRICULUM_SUBJECTS) {
-      for (const t of sub.topics) {
-        const tName = t.topicName.toLowerCase();
-        if (q.includes(tName) || tName.includes(q)) {
-          curriculumResourceText = `\n\nVerified Original Course Material & Textbooks for ${t.topicName}:\n${t.transcript}\nReferences: Cormen CLRS, Silberschatz OS Concepts, James-Witten ISLR, MIT OpenCourseWare.`;
-          break;
-        }
-      }
-      if (curriculumResourceText) break;
-    }
+    logger.info(`[LLM:OpenAI] Answering user query (Claude/ChatGPT style)...`);
+    const sysPrompt = `You are a brilliant, versatile, and highly capable AI assistant like ChatGPT and Claude.
+Answer whatever the user asks clearly, accurately, and thoroughly.
+- If the user asks for code, write clean, well-commented, production-ready code with explanations.
+- If the user asks about their notes or provided context, synthesize and reference them accurately.
+- If the user asks about mathematics, science, engineering, humanities, or general knowledge, provide articulate, insightful explanations.
+- Use markdown formatting with clear headers, bullet points, and code blocks as appropriate.
+User study context (if provided): "${context || 'None'}"`;
 
-    const sysPrompt = `You are a helpful AI study assistant. Answer the student's doubt with accurate, educational, in-depth details. Use the provided original course material and textbooks for answers.
-IMPORTANT CONSTRAINT: Do NOT use any special characters, markdown hashes, asterisks, equations, LaTeX symbols, emojis, or table characters. Provide clean, plain text with simple numbers or bullet hyphens and clear line breaks.
-Original Course Material Context: "${context || 'None'}"${curriculumResourceText}`;
     const openAiMessages: any[] = [
       { role: 'system', content: sysPrompt },
       ...messages.map(m => ({ role: m.role, content: m.content }))
@@ -804,7 +859,7 @@ Original Course Material Context: "${context || 'None'}"${curriculumResourceText
       model: 'gpt-4o-mini',
       messages: openAiMessages,
     });
-    return response.choices[0].message.content || 'Here is your study answer.';
+    return response.choices[0].message.content || 'Here is your answer.';
   }
 }
 

@@ -90,56 +90,44 @@ export class NotesService {
       })),
     });
 
-    const topicQuestions: any[] = [];
-    for (let lvl = 1; lvl <= 8; lvl++) {
-      const diff = lvl <= 2 ? 'easy' : lvl <= 6 ? 'medium' : 'hard';
-      topicQuestions.push(
-        {
-          question: `[Level ${lvl}] What is the primary definition and mechanism of "${title}"?`,
-          options: [
-            summaryResult.bulletPoints?.[0] || `Key foundational concept of ${title}`,
-            'An unrelated secondary anomaly',
-            'Deprecated legacy mechanism',
-            'None of the above'
-          ],
-          correct_answer: summaryResult.bulletPoints?.[0] || `Key foundational concept of ${title}`,
-          correct_index: 0,
-          explanation: `Derived directly from the verified notes for ${title}.`,
-          hint: `Think about the foundational mechanism of ${title}.`,
-          level: lvl,
-          difficulty: diff,
-          topic_tag: data.topic || title,
-        },
-        {
-          question: `[Level ${lvl}] Which operational rule or complexity guarantee applies to "${title}"?`,
-          options: [
-            summaryResult.bulletPoints?.[1] || `Optimal complexity and structured workflow in ${title}`,
-            'Arbitrary non-deterministic processing',
-            'Bypassing all data integrity checks',
-            'Zero resource allocation'
-          ],
-          correct_answer: summaryResult.bulletPoints?.[1] || `Optimal complexity and structured workflow in ${title}`,
-          correct_index: 0,
-          explanation: `Operational evaluation for ${title} requires adhering to standard structural invariants.`,
-          hint: `Focus on complexity guarantees and rules of ${title}.`,
-          level: lvl,
-          difficulty: diff,
-          topic_tag: data.topic || title,
-        }
-      );
-    }
+    const rawQuiz = await llm.generateQuiz(content || summaryResult.summaryText, 6).catch(() => []);
+    const topicQuestions: any[] = (rawQuiz || []).map((q: any, i: number) => {
+      const opts = q.options && q.options.length >= 4 ? q.options : [
+        summaryResult.bulletPoints?.[0] || `Key foundational concept of ${title}`,
+        'An inverted behavior counter to what is stated in the notes.',
+        'An unrelated secondary concept not referenced in this note.',
+        'None of the above principles apply.'
+      ];
+      const cIdx = typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < opts.length ? q.correctIndex : 0;
+      const cAns = q.correctAnswer || opts[cIdx];
+      opts[cIdx] = cAns;
 
-    await QuizModel.create({
-      _id: noteId,
-      user_id: userId,
-      subject_id: data.subjectId,
-      audio_note_id: noteId,
-      topic_tag: data.topic || title,
-      title: `${title} — Master Assessment (Levels 1-8)`,
-      difficulty: 'medium',
-      questions: topicQuestions,
-      question_count: 16,
-    }).catch(() => {});
+      return {
+        question: q.question || `Based on your note "${title}", what is stated regarding this concept?`,
+        options: opts,
+        correct_answer: cAns,
+        correct_index: cIdx,
+        explanation: q.explanation || `Derived directly from your verified note for ${title}.`,
+        hint: q.hint || `Recall the key points recorded in your note regarding ${title}.`,
+        level: Math.floor(i / 2) + 1,
+        difficulty: q.difficulty || (i < 2 ? 'easy' : 'medium'),
+        topic_tag: data.topic || title,
+      };
+    });
+
+    if (topicQuestions.length > 0) {
+      await QuizModel.create({
+        _id: noteId,
+        user_id: userId,
+        subject_id: data.subjectId,
+        audio_note_id: noteId,
+        topic_tag: data.topic || title,
+        title: `${title} Quiz`,
+        difficulty: 'medium',
+        questions: topicQuestions,
+        question_count: topicQuestions.length,
+      }).catch(() => {});
+    }
 
     await SubjectModel.updateOne({ _id: data.subjectId }, { $inc: { note_count: 1 } }).catch(() => {});
 

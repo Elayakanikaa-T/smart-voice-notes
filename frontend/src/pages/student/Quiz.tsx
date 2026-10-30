@@ -13,7 +13,10 @@ import {
   Unlock, 
   Sparkles, 
   ArrowRight,
-  Trash2
+  Trash2,
+  Plus,
+  BookOpen,
+  X
 } from 'lucide-react';
 import api from '../../lib/api';
 
@@ -77,10 +80,21 @@ export default function Quiz() {
   const [evaluations, setEvaluations] = useState<EvaluatedItem[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [score, setScore] = useState(0);
+
+  // Generate Quiz from Notes Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userNotes, setUserNotes] = useState<any[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState('');
+  const [quizDifficulty, setQuizDifficulty] = useState('medium');
+  const [questionCount, setQuestionCount] = useState(16);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [generateError, setGenerateError] = useState('');
   
   // Filter states
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
@@ -104,6 +118,54 @@ export default function Quiz() {
     } catch {}
   }, []);
 
+  const openCreateQuizModal = async () => {
+    setShowCreateModal(true);
+    setGenerateError('');
+    if (userNotes.length === 0) {
+      setLoadingNotes(true);
+      try {
+        const { data } = await api.get('/notes?limit=100');
+        const notesList = data.data?.notes || data.data || [];
+        setUserNotes(notesList);
+        if (notesList.length > 0) {
+          setSelectedNoteId(notesList[0].id || notesList[0]._id);
+        }
+      } catch (err) {
+        console.error('Failed to load notes', err);
+      } finally {
+        setLoadingNotes(false);
+      }
+    }
+  };
+
+  const handleGenerateQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNoteId) {
+      setGenerateError('Please select a study note.');
+      return;
+    }
+    setGeneratingQuiz(true);
+    setGenerateError('');
+    try {
+      const { data } = await api.post('/quizzes/generate-from-note', {
+        noteId: selectedNoteId,
+        count: Number(questionCount),
+        difficulty: quizDifficulty,
+      });
+      const newQuiz = data.data?.quiz;
+      if (newQuiz) {
+        setQuizzes(prev => [newQuiz, ...prev.filter(q => q.id !== newQuiz.id)]);
+        setShowCreateModal(false);
+        // Automatically open the levels for the newly generated quiz!
+        await openTopicLevels(newQuiz);
+      }
+    } catch (err: any) {
+      setGenerateError(err.response?.data?.message || 'Failed to generate quiz from note. Please try again.');
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
+
   const saveUnlockedLevel = (quizId: string, level: number) => {
     setUnlockedLevelMap(prev => {
       const currentMax = prev[quizId] || 1;
@@ -122,31 +184,14 @@ export default function Quiz() {
     if (qSubId && (qSubId === targetId || qSubId.toString() === targetId.toString())) return true;
     
     if (targetSub) {
-      const sName = targetSub.name.toLowerCase();
-      const qTitle = (q.title || '').toLowerCase();
-      const qSubName = (q.subject_name || '').toLowerCase();
-      const qTopic = ((q as any).topic_tag || '').toLowerCase();
+      const sName = targetSub.name.toLowerCase().trim();
+      const qTitle = (q.title || '').toLowerCase().trim();
+      const qSubName = (q.subject_name || '').toLowerCase().trim();
+      const qTopic = ((q as any).topic_tag || '').toLowerCase().trim();
 
       if (qSubName && (qSubName.includes(sName) || sName.includes(qSubName))) return true;
       if (qTopic && (qTopic.includes(sName) || sName.includes(qTopic))) return true;
-      
-      if (sName.includes('data structure') && (
-        qTitle.includes('array') || qTitle.includes('tree') || qTitle.includes('graph') || 
-        qTitle.includes('stack') || qTitle.includes('queue') || qTitle.includes('list') || 
-        qTitle.includes('dijkstra') || qTitle.includes('data structure')
-      )) return true;
-
-      if (sName.includes('operating system') && (
-        qTitle.includes('process') || qTitle.includes('cpu') || qTitle.includes('scheduling') || 
-        qTitle.includes('memory') || qTitle.includes('paging') || qTitle.includes('file system') || 
-        qTitle.includes('operating system') || qTitle.includes('virtual memory')
-      )) return true;
-
-      if (sName.includes('data analytic') && (
-        qTitle.includes('statistic') || qTitle.includes('regression') || qTitle.includes('eda') || 
-        qTitle.includes('clustering') || qTitle.includes('data analytic') || qTitle.includes('logistic') || 
-        qTitle.includes('mean') || qTitle.includes('pca')
-      )) return true;
+      if (qTitle && (qTitle.includes(sName) || sName.includes(qTitle))) return true;
     }
     return false;
   };
@@ -195,6 +240,7 @@ export default function Quiz() {
     setEvaluations([]);
     setQIndex(0);
     setShowHint(false);
+    setShowAnswer(false);
     setPhase('quiz');
   };
 
@@ -267,6 +313,7 @@ export default function Quiz() {
     setEvaluations([]); 
     setScore(0); 
     setShowHint(false);
+    setShowAnswer(false);
   };
 
   const currentQ = currentQuestions[qIndex];
@@ -308,20 +355,30 @@ export default function Quiz() {
                 8-Level Progressive Quizzes & Assessments
               </h1>
               <p className="text-slate-400 mt-1 text-sm">
-                Each topic contains 16 verified questions divided into 8 progressive levels (exactly 2 questions per level).
+                Each topic contains verified questions divided into progressive levels. Quizzes are generated directly from your study notes.
               </p>
             </div>
 
-            {/* Search Bar */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search topic or concept..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-              />
+            <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+              <button
+                onClick={openCreateQuizModal}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all whitespace-nowrap"
+              >
+                <Plus size={15} />
+                <span>Create Quiz from Notes</span>
+              </button>
+
+              {/* Search Bar */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search topic or concept..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
           </div>
 
@@ -591,33 +648,65 @@ export default function Quiz() {
               ))}
             </div>
 
-            {/* Non-Spoiling Learning Hint Toggle */}
-            {currentQ.hint && (
-              <div className="pt-2">
-                {!showHint ? (
-                  <button
-                    onClick={() => setShowHint(true)}
-                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 transition-colors"
-                  >
-                    <Lightbulb size={13} />
-                    <span>Need a Hint?</span>
-                  </button>
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 leading-relaxed flex items-start gap-2">
-                    <Lightbulb size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-amber-300 block mb-0.5 font-bold">Learning Hint:</strong>
-                      {currentQ.hint}
-                    </div>
-                  </div>
-                )}
+            {/* Hint and Reveal Answer Action Buttons */}
+            <div className="pt-2 flex flex-wrap items-center gap-2.5">
+              {currentQ.hint && (
+                <button
+                  type="button"
+                  onClick={() => setShowHint(!showHint)}
+                  className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                    showHint 
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm' 
+                      : 'bg-amber-500/10 text-amber-400 hover:text-amber-300 border-amber-500/20'
+                  }`}
+                >
+                  <Lightbulb size={13} />
+                  <span>{showHint ? 'Hide Hint' : '💡 Need a Hint?'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowAnswer(!showAnswer)}
+                className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                  showAnswer 
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm' 
+                    : 'bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 border-emerald-500/20'
+                }`}
+              >
+                <CheckCircle2 size={13} />
+                <span>{showAnswer ? 'Hide Answer' : '👁️ Show Answer'}</span>
+              </button>
+            </div>
+
+            {/* Hint Box */}
+            {showHint && currentQ.hint && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 leading-relaxed flex items-start gap-2.5">
+                <Lightbulb size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-amber-300 block mb-0.5 font-bold">Learning Hint:</strong>
+                  {currentQ.hint}
+                </div>
+              </div>
+            )}
+
+            {/* Reveal Answer Box */}
+            {showAnswer && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200 leading-relaxed flex items-start gap-2.5">
+                <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-emerald-300 block mb-1 font-bold">
+                    Exact Correct Answer: {currentQ.correct_answer || (currentQ.options ? `${String.fromCharCode(65 + currentQ.correct_index)}. ${currentQ.options[currentQ.correct_index]}` : 'N/A')}
+                  </strong>
+                  <p className="text-slate-300 leading-relaxed"><span className="text-emerald-400 font-semibold">Explanation:</span> {currentQ.explanation}</p>
+                </div>
               </div>
             )}
 
             {/* Navigation Footer */}
             <div className="mt-8 flex justify-between pt-4 border-t border-slate-800">
               <button 
-                onClick={() => { setQIndex(Math.max(0, qIndex - 1)); setShowHint(false); }} 
+                onClick={() => { setQIndex(Math.max(0, qIndex - 1)); setShowHint(false); setShowAnswer(false); }} 
                 disabled={qIndex === 0}
                 className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:border-slate-500 disabled:opacity-30 transition-colors font-semibold"
               >
@@ -625,7 +714,7 @@ export default function Quiz() {
               </button>
               {qIndex < currentQuestions.length - 1 ? (
                 <button 
-                  onClick={() => { setQIndex(qIndex + 1); setShowHint(false); }}
+                  onClick={() => { setQIndex(qIndex + 1); setShowHint(false); setShowAnswer(false); }}
                   className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-500 shadow-md shadow-blue-500/20 transition-all"
                 >
                   Next Question →
@@ -709,6 +798,130 @@ export default function Quiz() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Generate Quiz from My Notes */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute right-5 top-5 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                <FlaskConical size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Create Quiz from My Notes</h3>
+                <p className="text-xs text-slate-400">Generate an exact quiz directly anchored in your lecture note content.</p>
+              </div>
+            </div>
+
+            {loadingNotes ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <Loader2 size={26} className="animate-spin text-blue-400" />
+                <span className="text-xs font-medium">Loading your study notes...</span>
+              </div>
+            ) : userNotes.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 space-y-3">
+                <BookOpen size={36} className="mx-auto text-slate-600" />
+                <p className="text-sm font-semibold text-white">No study notes found</p>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                  Record an audio lecture or create a note first so we can build custom quizzes from it.
+                </p>
+                <a
+                  href="/student/record"
+                  className="inline-block mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 shadow-md shadow-blue-500/20"
+                >
+                  Record Voice Note Now
+                </a>
+              </div>
+            ) : (
+              <form onSubmit={handleGenerateQuiz} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                    Select Study Note:
+                  </label>
+                  <select
+                    value={selectedNoteId}
+                    onChange={(e) => setSelectedNoteId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                  >
+                    {userNotes.map((n: any) => {
+                      const nId = n.id || n._id;
+                      const subName = n.subject_name || (typeof n.subject_id === 'object' ? n.subject_id?.name : 'General Note');
+                      return (
+                        <option key={nId} value={nId}>
+                          {n.title || n.topic_tag || 'Untitled Note'} ({subName})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                      Question Count:
+                    </label>
+                    <select
+                      value={questionCount}
+                      onChange={(e) => setQuestionCount(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value={8}>8 Questions (4 Levels)</option>
+                      <option value={10}>10 Questions (5 Levels)</option>
+                      <option value={16}>16 Questions (Full 8 Levels)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                      Difficulty:
+                    </label>
+                    <select
+                      value={quizDifficulty}
+                      onChange={(e) => setQuizDifficulty(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="easy">Easy (Fundamentals)</option>
+                      <option value="medium">Medium (Standard)</option>
+                      <option value="hard">Hard (Advanced Tracing)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {generateError && (
+                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
+                    {generateError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={generatingQuiz}
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                  >
+                    {generatingQuiz ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    <span>{generatingQuiz ? 'Generating Accurate Quiz...' : 'Generate Quiz'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
