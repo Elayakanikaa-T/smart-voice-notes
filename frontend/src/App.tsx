@@ -65,9 +65,9 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/meetings/new" element={<NewMeeting />} />
+              <Route path="/meetings/profile" element={<Profile />} />
               <Route path="/meetings/:id" element={<MeetingDetail />} />
               <Route path="/meeting-search" element={<MeetingSearch />} />
-              <Route path="/meetings/profile" element={<Profile />} />
             </Route>
           </Route>
 
