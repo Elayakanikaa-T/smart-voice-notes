@@ -25,7 +25,8 @@ async function sendViaResend(opts: { to: string; subject: string; html: string; 
   if (!apiKey) return false;
 
   try {
-    const fromAddress = (process.env.EMAIL_FROM || process.env.RESEND_FROM || 'onboarding@resend.dev').trim();
+    // Use RESEND_FROM if verified custom domain; otherwise onboarding@resend.dev for sandbox testing
+    const fromAddress = (process.env.RESEND_FROM || 'onboarding@resend.dev').trim();
     const fromHeader = `"${opts.fromName || 'Smart Voice Notes'}" <${fromAddress}>`;
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -44,15 +45,20 @@ async function sendViaResend(opts: { to: string; subject: string; html: string; 
 
     if (!res.ok) {
       const errText = await res.text();
-      logger.warn(`[EmailService] Resend API returned error (${res.status}): ${errText}`);
-      return false;
+      logger.error(`[EmailService] Resend API error (${res.status}): ${errText}`);
+      let parsedMsg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMsg = parsed.message || errText;
+      } catch {}
+      throw new Error(`Email delivery failed: ${parsedMsg}`);
     }
 
     logger.info(`[EmailService] ✉️ Email delivered successfully via Resend HTTPS API to ${opts.to}`);
     return true;
   } catch (err: any) {
-    logger.warn(`[EmailService] Resend HTTP dispatch failed: ${err.message}`);
-    return false;
+    logger.error(`[EmailService] Resend HTTP dispatch failed: ${err.message}`);
+    throw err;
   }
 }
 
